@@ -53,7 +53,7 @@ AI_PROVIDER=vertex-glm5
 
 # GLM-5 Configuration
 VERTEX_GLM5_MODEL=zai-org/glm-5-maas
-VERTEX_GLM5_BASE_URL=https://aiplatform.googleapis.com/v1/projects/iwealthx-b7545/locations/global/endpoints/openapi
+VERTEX_GLM5_BASE_URL=https://aiplatform.googleapis.com/v1/projects/your-project-id/locations/global/endpoints/openapi
 VERTEX_GLM5_MAX_TOKENS=4096
 VERTEX_GLM5_TEMPERATURE=0.7
 ```
