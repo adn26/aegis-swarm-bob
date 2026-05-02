@@ -23,13 +23,21 @@ const config = {
   
   // AI Provider Configuration
   ai: {
-    provider: process.env.AI_PROVIDER || 'vertex-claude', // vertex-claude | vertex-gemini | openai | ollama
+    provider: process.env.AI_PROVIDER || 'vertex-glm5', // vertex-glm5 | vertex-claude | vertex-gemini | openai | ollama
     
-    // Google Vertex AI (Unified access to Claude & Gemini)
+    // Google Vertex AI (Unified access to GLM-5, Claude & Gemini)
     vertexAI: {
       projectId: process.env.VERTEX_AI_PROJECT_ID,
-      location: process.env.VERTEX_AI_LOCATION || 'us-central1',
+      location: process.env.VERTEX_AI_LOCATION || 'global',
       credentials: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      
+      // GLM-5 via OpenAI-compatible endpoint (Default for Red & Blue Teams)
+      glm5: {
+        model: process.env.VERTEX_GLM5_MODEL || 'zai-org/glm-5-maas',
+        baseURL: process.env.VERTEX_GLM5_BASE_URL || 'https://aiplatform.googleapis.com/v1/projects/iwealthx-b7545/locations/global/endpoints/openapi',
+        maxTokens: parseInt(process.env.VERTEX_GLM5_MAX_TOKENS || '4096', 10),
+        temperature: parseFloat(process.env.VERTEX_GLM5_TEMPERATURE || '0.7'),
+      },
       
       // Claude 4.6 Opus - Red Team Agent (Deep reasoning)
       opus: {
@@ -155,7 +163,7 @@ const validateConfig = () => {
   
   // Validate AI Provider
   const provider = config.ai.provider;
-  const validProviders = ['vertex-claude', 'vertex-gemini', 'openai', 'ollama'];
+  const validProviders = ['vertex-glm5', 'vertex-claude', 'vertex-gemini', 'openai', 'ollama'];
   
   if (!validProviders.includes(provider)) {
     errors.push(`Invalid AI_PROVIDER: ${provider}. Must be one of: ${validProviders.join(', ')}`);
@@ -163,6 +171,7 @@ const validateConfig = () => {
   
   // Validate provider-specific config
   switch (provider) {
+    case 'vertex-glm5':
     case 'vertex-claude':
     case 'vertex-gemini':
       if (!config.ai.vertexAI.projectId) {
