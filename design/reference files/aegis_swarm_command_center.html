@@ -1,0 +1,252 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; font-family: var(--font-mono, monospace); }
+  .root { background: #000; color: #c9a84c; min-height: 600px; padding: 16px; border: 1px solid #2a2000; border-radius: 8px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid #2a2000; padding-bottom: 12px; margin-bottom: 16px; }
+  .logo { font-size: 13px; font-weight: 500; letter-spacing: 2px; color: #d4a843; text-transform: uppercase; }
+  .logo span { color: #5a5040; }
+  .badge { font-size: 10px; padding: 2px 8px; border: 0.5px solid #c9a84c44; color: #c9a84c88; border-radius: 3px; letter-spacing: 1px; }
+  .badge.live { color: #c9a84c; border-color: #c9a84c; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .pr-header { background: #0a0800; border: 0.5px solid #2a2000; border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+  .pr-title { font-size: 11px; color: #6a5820; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .pr-name { font-size: 13px; color: #d4a843; }
+  .pr-meta { font-size: 11px; color: #4a3c18; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #c9a84c; animation: pulse 1.5s infinite; flex-shrink: 0; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .metric { background: #060400; border: 0.5px solid #1a1200; border-radius: 5px; padding: 10px 12px; }
+  .metric-label { font-size: 9px; color: #4a3c18; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .metric-val { font-size: 20px; color: #d4a843; font-weight: 500; }
+  .metric-val.red { color: #c0392b; }
+  .metric-val.green { color: #27ae60; }
+  .metric-val.amber { color: #c9a84c; }
+  .arena { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0; border: 0.5px solid #1a1200; border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+  .divider { background: #1a1200; }
+  .team { padding: 12px; }
+  .team-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 0.5px solid #1a1200; }
+  .team-icon { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .team-icon.red { background: #2a0a0a; color: #c0392b; border: 0.5px solid #3a1010; }
+  .team-icon.blue { background: #0a0a2a; color: #3498db; border: 0.5px solid #10103a; }
+  .team-name { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; }
+  .team-name.red { color: #c0392b; }
+  .team-name.blue { color: #3498db; }
+  .team-status { font-size: 9px; color: #4a3c18; margin-left: auto; }
+  .log-entry { margin-bottom: 6px; }
+  .log-time { font-size: 9px; color: #3a2c10; }
+  .log-msg { font-size: 11px; color: #8a7040; line-height: 1.5; }
+  .log-msg.highlight { color: #c9a84c; }
+  .log-msg.danger { color: #c0392b; }
+  .log-msg.success { color: #27ae60; }
+  .code-block { background: #040300; border: 0.5px solid #1a1200; border-radius: 4px; padding: 8px 10px; font-size: 10px; color: #8a7040; line-height: 1.6; margin: 6px 0; }
+  .code-block .kw { color: #c9a84c; }
+  .code-block .str { color: #8a6020; }
+  .code-block .cmt { color: #3a2c10; }
+  .judge-panel { background: #040300; border: 0.5px solid #1a1200; border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; }
+  .judge-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .judge-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #6a5820; }
+  .verdict { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .verdict-label { font-size: 9px; color: #4a3c18; letter-spacing: 1px; }
+  .verdict-val { font-size: 11px; padding: 2px 10px; border-radius: 3px; letter-spacing: 1px; }
+  .verdict-val.pass { background: #0a1a0a; color: #27ae60; border: 0.5px solid #1a3a1a; }
+  .verdict-val.fail { background: #1a0a0a; color: #c0392b; border: 0.5px solid #3a1010; }
+  .verdict-val.pending { background: #1a1200; color: #c9a84c; border: 0.5px solid #2a2000; }
+  .sandbox-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .sandbox-step { background: #060400; border: 0.5px solid #1a1200; border-radius: 4px; padding: 8px 10px; }
+  .sandbox-step-label { font-size: 9px; color: #3a2c10; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .sandbox-step-val { font-size: 11px; }
+  .sandbox-step-val.ok { color: #27ae60; }
+  .sandbox-step-val.fail { color: #c0392b; }
+  .sandbox-step-val.run { color: #c9a84c; animation: pulse 1.5s infinite; }
+  .timeline { display: flex; align-items: center; gap: 0; margin-bottom: 14px; }
+  .tl-step { flex: 1; text-align: center; position: relative; }
+  .tl-step::after { content: ''; position: absolute; top: 10px; left: 50%; width: 100%; height: 0.5px; background: #1a1200; z-index: 0; }
+  .tl-step:last-child::after { display: none; }
+  .tl-dot { width: 20px; height: 20px; border-radius: 50%; margin: 0 auto 4px; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+  .tl-dot.done { background: #27ae60; color: #000; border: none; }
+  .tl-dot.active { background: #c9a84c; color: #000; animation: pulse 1.5s infinite; }
+  .tl-dot.idle { background: #1a1200; color: #3a2c10; border: 0.5px solid #2a2000; }
+  .tl-label { font-size: 9px; color: #4a3c18; letter-spacing: 0.5px; }
+  .tl-label.active { color: #c9a84c; }
+  .action-row { display: flex; gap: 8px; }
+  .btn { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; padding: 7px 14px; border-radius: 4px; border: 0.5px solid; cursor: pointer; font-family: var(--font-mono, monospace); }
+  .btn-gold { background: #c9a84c; color: #000; border-color: #c9a84c; }
+  .btn-ghost { background: transparent; color: #6a5820; border-color: #2a2000; }
+  .btn-ghost:hover { border-color: #c9a84c44; color: #c9a84c88; }
+</style>
+
+<div class="root">
+  <div class="topbar">
+    <div class="logo">Aegis<span> //</span> Swarm</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="badge">PR #247</span>
+      <span class="badge live">● LIVE AUDIT</span>
+    </div>
+  </div>
+
+  <div class="pr-header">
+    <div class="status-dot"></div>
+    <div>
+      <div class="pr-title">Pull Request</div>
+      <div class="pr-name">feat: add concurrent withdrawal endpoint — /api/v2/transfer</div>
+    </div>
+    <div class="pr-meta" style="margin-left:auto;text-align:right;">
+      <div>adnan-dev → main</div>
+      <div>iWealthX · 3 files changed</div>
+    </div>
+  </div>
+
+  <div class="timeline" style="margin-bottom:14px;">
+    <div class="tl-step">
+      <div class="tl-dot done">✓</div>
+      <div class="tl-label">PR ingested</div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-dot done">✓</div>
+      <div class="tl-label">Red team</div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-dot active">→</div>
+      <div class="tl-label active">Blue team</div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-dot idle">□</div>
+      <div class="tl-label">Sandbox</div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-dot idle">□</div>
+      <div class="tl-label">Verdict</div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Vulns found</div>
+      <div class="metric-val red">2</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Patches gen.</div>
+      <div class="metric-val amber">1</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Sandbox runs</div>
+      <div class="metric-val">0</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Time elapsed</div>
+      <div class="metric-val">1m 42s</div>
+    </div>
+  </div>
+
+  <div class="arena">
+    <div class="team" style="background:#080400;">
+      <div class="team-header">
+        <div class="team-icon red">⚔</div>
+        <span class="team-name red">Red Team</span>
+        <span class="team-status">COMPLETE</span>
+      </div>
+      <div class="log-entry">
+        <div class="log-time">00:00:12</div>
+        <div class="log-msg">Scanning diff for async state mutations...</div>
+      </div>
+      <div class="log-entry">
+        <div class="log-time">00:00:31</div>
+        <div class="log-msg danger">CRITICAL: Race condition detected in balance debit path. No atomic lock on getBalance → debit sequence.</div>
+      </div>
+      <div class="log-entry">
+        <div class="log-time">00:00:48</div>
+        <div class="log-msg">Generating exploit — firing 50 concurrent requests before balance commit...</div>
+      </div>
+      <div class="code-block">
+        <span class="cmt">// exploit.js — double-spend via race</span><br>
+        <span class="kw">const</span> reqs = Array(50).fill(<span class="kw">null</span>).map(() =&gt;<br>
+        &nbsp;&nbsp;fetch(<span class="str">'/api/v2/transfer'</span>, {<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;method: <span class="str">'POST'</span>,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;body: JSON.stringify({ amount: 9999, to: <span class="str">'atk'</span> })<br>
+        &nbsp;&nbsp;})<br>
+        );<br>
+        <span class="kw">await</span> Promise.all(reqs);<br>
+        <span class="cmt">// Expected: balance &lt; 0 → funds drained</span>
+      </div>
+      <div class="log-entry">
+        <div class="log-time">01:02:00</div>
+        <div class="log-msg danger">SECONDARY: Missing idempotency key validation. Same tx can replay across sessions.</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="team" style="background:#040408;">
+      <div class="team-header">
+        <div class="team-icon blue">🛡</div>
+        <span class="team-name blue">Blue Team</span>
+        <span class="team-status" style="animation:pulse 1.5s infinite;color:#c9a84c;">PATCHING...</span>
+      </div>
+      <div class="log-entry">
+        <div class="log-time">01:02:08</div>
+        <div class="log-msg">Received Red Team exploit. Analyzing attack vector...</div>
+      </div>
+      <div class="log-entry">
+        <div class="log-time">01:02:24</div>
+        <div class="log-msg highlight">Strategy: wrap debit in DB-level row lock + Redis mutex per account ID.</div>
+      </div>
+      <div class="code-block">
+        <span class="cmt">// patch: atomic lock on transfer</span><br>
+        <span class="kw">const</span> lock = <span class="kw">await</span> redis.set(<br>
+        &nbsp;&nbsp;<span class="str">`lock:${accountId}`</span>, <span class="str">'1'</span>,<br>
+        &nbsp;&nbsp;<span class="str">'NX'</span>, <span class="str">'PX'</span>, 3000<br>
+        );<br>
+        <span class="kw">if</span> (!lock) <span class="kw">throw</span> <span class="kw">new</span> Error(<span class="str">'Concurrent tx'</span>);<br>
+        <span class="kw">await</span> db.transaction(<span class="kw">async</span> (trx) =&gt; {<br>
+        &nbsp;&nbsp;<span class="kw">await</span> trx.raw(<span class="str">'SELECT ... FOR UPDATE'</span>);<br>
+        &nbsp;&nbsp;<span class="cmt">// debit only after lock acquired</span><br>
+        });
+      </div>
+      <div class="log-entry">
+        <div class="log-time">01:02:41</div>
+        <div class="log-msg">Patch generated. Awaiting sandbox verification...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="judge-panel">
+    <div class="judge-header">
+      <span style="font-size:13px;color:#6a5820;">⚖</span>
+      <span class="judge-title">Sandbox Judge</span>
+      <div class="verdict">
+        <span class="verdict-label">VERDICT</span>
+        <span class="verdict-val pending">PENDING</span>
+      </div>
+    </div>
+    <div class="sandbox-grid">
+      <div class="sandbox-step">
+        <div class="sandbox-step-label">Docker env</div>
+        <div class="sandbox-step-val ok">✓ Spawned</div>
+      </div>
+      <div class="sandbox-step">
+        <div class="sandbox-step-label">Patch applied</div>
+        <div class="sandbox-step-val ok">✓ Compiled</div>
+      </div>
+      <div class="sandbox-step">
+        <div class="sandbox-step-label">Exploit run</div>
+        <div class="sandbox-step-val run">● Running</div>
+      </div>
+      <div class="sandbox-step">
+        <div class="sandbox-step-label">Balance integrity</div>
+        <div class="sandbox-step-val run">● Checking</div>
+      </div>
+      <div class="sandbox-step">
+        <div class="sandbox-step-label">Replay attack</div>
+        <div class="sandbox-step-val idle" style="color:#3a2c10;">— Queued</div>
+      </div>
+      <div class="sandbox-step">
+        <div class="sandbox-step-label">Final score</div>
+        <div class="sandbox-step-val idle" style="color:#3a2c10;">— Queued</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="btn btn-gold" onclick="sendPrompt('Show me the full Red Team exploit report for PR #247')">View full report ↗</button>
+    <button class="btn btn-ghost" onclick="sendPrompt('Explain the race condition vulnerability found in the transfer endpoint')">Explain vuln ↗</button>
+    <button class="btn btn-ghost" onclick="sendPrompt('What would happen if the sandbox verdict fails?')">What if it fails? ↗</button>
+  </div>
+</div>

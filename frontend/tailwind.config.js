@@ -7,40 +7,42 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Primary backgrounds
-        'bg-primary': '#0a0a0f',
-        'bg-secondary': '#13131a',
-        'bg-tertiary': '#1a1a24',
+        // Modern Enterprise SaaS UI - Design System Colors
+        primary: '#4F46E5',        // Indigo 600
+        'on-primary': '#FFFFFF',   // White text on primary
+        secondary: '#F8FAFC',      // Slate 50
+        accent: '#0EA5E9',         // Sky 500
+        background: '#FFFFFF',     // Pure white background
+        foreground: '#0F172A',     // Slate 900 text
+        muted: '#F1F5F9',          // Slate 100 muted
+        border: '#E2E8F0',         // Slate 200 border
+        destructive: '#EF4444',    // Red 500
+        ring: '#818CF8',           // Indigo 400 focus ring
         
-        // Gold accents
-        'gold': {
-          DEFAULT: '#fbbf24',
-          light: '#fef3c7',
-          dark: '#f59e0b',
-        },
+        // Status colors (severity badges)
+        'critical': '#DC2626',     // Red 600
+        'high': '#EA580C',         // Orange 600
+        'medium': '#D97706',       // Amber 600
+        'low': '#059669',          // Emerald 600
         
-        // Status colors
-        'critical': '#ef4444',
-        'high': '#f97316',
-        'medium': '#eab308',
-        'low': '#3b82f6',
-        
-        // Text colors
-        'text-primary': '#f9fafb',
-        'text-secondary': '#d1d5db',
-        'text-tertiary': '#9ca3af',
-        
-        // Borders
-        'border-primary': '#27272a',
-        'border-accent': '#fbbf24',
+        // Legacy aliases for compatibility
+        'bg-primary': '#FFFFFF',
+        'bg-secondary': '#F8FAFC',
+        'bg-tertiary': '#F1F5F9',
+        'text-primary': '#0F172A',
+        'text-secondary': '#475569',
+        'text-tertiary': '#64748B',
+        'border-primary': '#E2E8F0',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'monospace'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        heading: ['Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'gold': '0 0 20px rgba(251, 191, 36, 0.3)',
-        'gold-lg': '0 0 40px rgba(251, 191, 36, 0.4)',
+        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+        'soft-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)',
+        'soft-xl': '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',
@@ -54,7 +56,7 @@ export default {
           '100%': { opacity: '1' },
         },
         slideUp: {
-          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
         shimmer: {
@@ -66,5 +68,3 @@ export default {
   },
   plugins: [],
 }
-
-// Made with Bob
