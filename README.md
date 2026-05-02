@@ -323,7 +323,7 @@ MIT License - see LICENSE file for details
 ## 📞 Support
 
 For issues and questions:
-- GitHub Issues: [Create an issue](https://github.com/aegis-swarm-bob/aegis-swarm-bob/issues)
+- GitHub Issues: [Create an issue](https://github.com/adn26/aegis-swarm-bob/issues)
 - Documentation: [Read the docs](docs/)
 - Vertex AI Setup: [Setup Guide](docs/VERTEX_AI_SETUP.md)
 
