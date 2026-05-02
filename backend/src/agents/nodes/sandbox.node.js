@@ -1,4 +1,5 @@
 import storageService from '../../services/storage.service.js';
+import sandboxService from '../../services/sandbox.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
 import { addMessage } from '../graph/state.js';
@@ -6,9 +7,6 @@ import { addMessage } from '../graph/state.js';
 /**
  * Sandbox Test Node
  * Tests patches in an isolated Docker container
- * 
- * Note: Docker sandbox implementation will be added in Phase 7
- * For now, this is a placeholder that marks patches as tested
  */
 export const sandboxTestNode = async (state) => {
   try {
@@ -17,6 +15,11 @@ export const sandboxTestNode = async (state) => {
     if (!file) {
       logger.warn('No current file for sandbox testing');
       return state;
+    }
+
+    // Update status for sequential flow
+    if (state.currentStep === 'start_sandbox' || state.currentFileIndex === 0) {
+       await storageService.updateAudit(state.auditId, { status: 'testing' });
     }
 
     // Get patches for current file
@@ -38,34 +41,19 @@ export const sandboxTestNode = async (state) => {
       patchCount: filePatches.length,
     });
 
-    // TODO: Implement actual Docker sandbox testing in Phase 7
-    // For now, simulate testing with a delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Send SSE event
-    sseService.sendTestsRunning(state.auditId, {
-      message: `Running tests in sandbox for ${file.path}`,
-      filePath: file.path,
-    });
-
-    // Simulate test results (all pass for now)
-    const testResults = filePatches.map(patch => ({
-      patchId: patch.id,
-      filePath: patch.filePath,
-      passed: true,
-      output: 'Patch applied successfully (simulated)',
-      executionTime: Math.random() * 1000,
-    }));
+    // Run tests in real Docker sandbox
+    const testResults = await sandboxService.runTests(
+      state.workspacePath,
+      file.path,
+      filePatches
+    );
 
     // Update patches in database
     for (const result of testResults) {
-      await storageService.updateAudit(state.auditId, {
-        testsPassed: result.passed,
+      await storageService.updatePatch(result.patchId, {
+        testPassed: result.passed,
+        testOutput: result.output,
       });
-
-      // Update patch record
-      // Note: We'll need to add an update method to storage service
-      // For now, we'll just log
       logger.info(`Patch ${result.patchId} test result: ${result.passed ? 'PASSED' : 'FAILED'}`);
     }
 
@@ -78,7 +66,7 @@ export const sandboxTestNode = async (state) => {
       failed: testResults.filter(r => !r.passed).length,
     });
 
-    // Update state with test results (workflow will handle moving to next file)
+    // Update state with test results
     const updatedState = {
       ...state,
       testResults: [...state.testResults, ...testResults],
@@ -97,15 +85,11 @@ export const sandboxTestNode = async (state) => {
 
   } catch (error) {
     logger.error('Sandbox testing failed:', error);
-
-    // Send error event
     sseService.sendError(state.auditId, {
       message: 'Sandbox testing failed',
       error: error.message,
       file: state.currentFile?.path,
     });
-
-    // Return state on error (workflow will handle moving to next file)
     return addMessage(state, {
       role: 'system',
       content: `Sandbox testing failed for ${state.currentFile?.path}: ${error.message}`,
@@ -115,5 +99,3 @@ export const sandboxTestNode = async (state) => {
 };
 
 export default sandboxTestNode;
-
-// Made with Bob

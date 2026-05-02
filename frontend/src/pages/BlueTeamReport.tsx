@@ -1,142 +1,183 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { Loader2, AlertCircle, ArrowLeft, Shield, Bug, CheckCircle } from 'lucide-react';
+import { apiService } from '../services/api.service';
+import { Audit, Patch, Vulnerability } from '../types/audit.types';
 import '../styles/reports.css';
 
 const BlueTeamReport: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [audit, setAudit] = useState<Audit | null>(null);
+  const [patches, setPatches] = useState<Patch[]>([]);
+  const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchReportData = async () => {
+      try {
+        setLoading(true);
+        const [auditData, patchesData, vulnsData] = await Promise.all([
+          apiService.getAudit(id),
+          apiService.getPatches(id),
+          apiService.getVulnerabilities(id),
+        ]);
+        setAudit(auditData);
+        setPatches(patchesData);
+        setVulnerabilities(vulnsData);
+      } catch (err) {
+        console.error('Failed to fetch report:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load report');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReportData();
+  }, [id]);
+
+  const getVulnerabilityForPatch = (patch: Patch) => {
+    return vulnerabilities.find(v => v.id === patch.vulnerability_id);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <Loader2 className="w-12 h-12 animate-spin text-gold-500" />
+      </div>
+    );
+  }
+
+  if (error || !audit) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-black">
+        <div className="max-w-md w-full bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-500 mb-2">Failed to Load Report</h2>
+          <p className="text-red-400 mb-4">{error || 'Audit not found'}</p>
+          <Link to="/" className="cc-btn cc-btn-gold inline-flex items-center">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="report-container">
       <div className="rh">
         <div>
           <div className="rtitle">Blue Team — Patch & Remediation Report</div>
-          <div className="rname">PR #247 — feat: concurrent withdrawal endpoint</div>
-          <div className="rmeta">Remediated by: Aegis/BlueAgent v2.1 &nbsp;|&nbsp; 2025-07-12 01:05 UTC &nbsp;|&nbsp; Sandbox Validated</div>
+          <div className="rname">Audit #{audit.id.slice(0, 8)} — {audit.repo_url}</div>
+          <div className="rmeta">
+            Remediated by: Aegis Swarm &nbsp;|&nbsp; 
+            {audit.completed_at ? new Date(audit.completed_at).toLocaleString() : 'In Progress'} &nbsp;|&nbsp; 
+            {audit.status === 'completed' ? 'Verified & Secured' : 'Remediation In Progress'}
+          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div className="risk-badge risk-low" style={{ marginBottom: '6px' }}>SECURED</div>
-          <div style={{ fontSize: '9px', color: '#3a2c10' }}>2 patches applied</div>
+          <div className={`risk-badge ${audit.status === 'completed' ? 'risk-low' : 'risk-high'}`}>
+            {audit.status === 'completed' ? 'SECURED' : 'PATCHING'}
+          </div>
+          <div style={{ fontSize: '9px', color: '#3a2c10' }}>{patches.length} patches applied</div>
         </div>
       </div>
 
       <div className="sec">
-        <div className="sec-label">Patch 01 — Critical Mitigation</div>
+        <div className="sec-label">Executive Summary</div>
         <div className="vuln-card safe">
-          <div className="vuln-top">
-            <span className="vuln-id">CVE-CLASS: CWE-362</span>
-            <span className="vuln-name">Race condition resolved — Added row-level locking (SELECT FOR UPDATE)</span>
-            <span className="risk-badge risk-low">Patched</span>
-          </div>
-          <div className="vuln-desc">
-            The <span style={{ color: '#c9a84c' }}>POST /api/v2/transfer</span> handler was rewritten to use an explicit database transaction with row-level locking. The balance check and debit operations are now fully atomic. Concurrent requests targeting the same account will now queue and process sequentially, preventing any double-spend scenario.
-          </div>
-          <div className="vuln-meta-row">
-            <div className="vmeta">
-              <div className="vmeta-label">Patch complexity</div>
-              <div className="vmeta-val">Medium — DB Transaction</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Performance Impact</div>
-              <div className="vmeta-val warn">Negligible (Lock scope {"<"} 5ms)</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Sandbox Status</div>
-              <div className="vmeta-val safe">Verified (Pass 50/50 tests)</div>
-            </div>
-          </div>
-
-          <div className="code-label">Secured code path — transferController.js (Patched)</div>
-          <div className="code-block" style={{ marginBottom: '10px' }}>
-            <span className="cmt">// PATCHED — Atomic transaction with FOR UPDATE lock</span><br />
-            <span className="kw">await</span> <span className="fn">db.transaction</span>(<span className="kw">async</span> (trx) = {'{'}<br />
-            &nbsp;&nbsp;<span className="cmt">// Row lock prevents concurrent reads on this account</span><br />
-            &nbsp;&nbsp;<span className="kw">const</span> account = <span className="kw">await</span> trx.accounts.<span className="fn">findOne</span>(<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;{'{'} id: userId {'}'}, <br />
-            &nbsp;&nbsp;&nbsp;&nbsp;{'{'} lock: <span className="str">'UPDATE'</span> {'}'} <span className="cmt">// ← Critical fix</span><br />
-            &nbsp;&nbsp;);<br />
-            &nbsp;&nbsp;<span className="kw">if</span> (account.balance {"<"} amount) <span className="kw">throw</span> <span className="fn">Error</span>(<span className="str">'Insufficient funds'</span>);<br />
-            <br />
-            &nbsp;&nbsp;<span className="kw">await</span> trx.accounts.<span className="fn">update</span>({'{'} id: userId {'}'},<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;{'{'} balance: account.balance - amount {'}'});<br />
-            {'}'});
-          </div>
+          <p className="text-gold-200">
+            The Blue Team has analyzed the {vulnerabilities.length} vulnerabilities identified by the Red Team and generated {patches.length} mitigation patches. 
+            {audit.status === 'completed' ? ' All patches have been verified in the Aegis Sandbox.' : ' Patches are currently being validated.'}
+          </p>
         </div>
       </div>
 
-      <div className="sec">
-        <div className="sec-label">Patch 02 — High Mitigation</div>
-        <div className="vuln-card safe">
-          <div className="vuln-top">
-            <span className="vuln-id">CVE-CLASS: CWE-294</span>
-            <span className="vuln-name">Idempotency enforced — Replay attacks neutralized</span>
-            <span className="risk-badge risk-low">Patched</span>
-          </div>
-          <div className="vuln-desc">
-            Implemented a mandatory <span style={{ color: '#c9a84c' }}>Idempotency-Key</span> HTTP header check. Processed keys are cached via Redis for 24 hours. Attempting to replay a captured request with an already processed key will immediately return a cached successful response without executing a secondary debit.
-          </div>
-          <div className="vuln-meta-row">
-            <div className="vmeta">
-              <div className="vmeta-label">Patch complexity</div>
-              <div className="vmeta-val">Low — Middleware logic</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Cache TTL</div>
-              <div className="vmeta-val">24 Hours (Redis)</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Sandbox Status</div>
-              <div className="vmeta-val safe">Verified (Pass 20/20 replays)</div>
-            </div>
-          </div>
-          
-          <div className="code-label">Secured code path — middleware/idempotency.js (New)</div>
-          <div className="code-block">
-            <span className="cmt">// PATCHED — Idempotency cache implementation</span><br />
-            <span className="kw">export const</span> <span className="fn">idempotencyCheck</span> = <span className="kw">async</span> (req, res, next) = {'{'}<br />
-            &nbsp;&nbsp;<span className="kw">const</span> key = req.headers[<span className="str">'idempotency-key'</span>];<br />
-            &nbsp;&nbsp;<span className="kw">if</span> (!key) <span className="kw">return</span> res.<span className="fn">status</span>(<span className="num">400</span>).<span className="fn">json</span>({'{'} error: <span className="str">'Idempotency key required'</span> {'}'});<br />
-            <br />
-            &nbsp;&nbsp;<span className="kw">const</span> cached = <span className="kw">await</span> redis.<span className="fn">get</span>(<span className="str">`idem:</span>{'$'}{'{'}key{'}'}<span className="str">`</span>);<br />
-            &nbsp;&nbsp;<span className="kw">if</span> (cached) <span className="kw">return</span> res.<span className="fn">json</span>(<span className="fn">JSON.parse</span>(cached));<br />
-            <br />
-            &nbsp;&nbsp;<span className="cmt">// Attach key to request for storage after successful commit</span><br />
-            &nbsp;&nbsp;req.idempotencyKey = key;<br />
-            &nbsp;&nbsp;<span className="fn">next</span>();<br />
-            {'}'};
-          </div>
-        </div>
-      </div>
+      {patches.length > 0 ? (
+        patches.map((patch, index) => {
+          const linkedVuln = getVulnerabilityForPatch(patch);
+          return (
+            <div className="sec" key={patch.id}>
+              <div className="sec-label">Mitigation {String(index + 1).padStart(2, '0')} — {linkedVuln?.type || 'Security Patch'}</div>
+              <div className={`vuln-card ${patch.test_passed ? 'safe' : 'high'}`}>
+                <div className="vuln-top">
+                  <span className="vuln-id flex items-center gap-1">
+                    <Shield className="w-3 h-3" /> PATCH-{patch.id.slice(0, 4)}
+                  </span>
+                  <span className="vuln-name">{patch.file_path}</span>
+                  <span className={`risk-badge ${patch.test_passed ? 'risk-low' : 'risk-high'}`}>
+                    {patch.test_passed ? 'Verified' : 'Pending'}
+                  </span>
+                </div>
 
-      <div className="sec">
-        <div className="sec-label">Sandbox Verification</div>
-        <div className="attack-chain">
-          <div className="ac-step">
-            <div className="ac-left"><div className="ac-dot green">✓</div><div className="ac-line"></div></div>
-            <div className="ac-content">
-              <div className="ac-title">Docker Sandbox Provisioned</div>
-              <div className="ac-detail">Node.js isolated container built with patched PR branch. Mock DB initialized with baseline balances.</div>
+                {linkedVuln && (
+                  <div className="mb-4 p-3 bg-red-900/10 border border-red-500/20 rounded text-sm">
+                    <div className="flex items-center gap-2 text-red-400 font-bold mb-1">
+                      <Bug className="w-3 h-3" /> Fixing Vulnerability:
+                    </div>
+                    <div className="text-gold-200">{linkedVuln.description}</div>
+                  </div>
+                )}
+
+                <div className="vuln-desc font-mono text-sm bg-black/40 p-3 rounded border border-gold-500/10 mb-4">
+                  {patch.explanation || 'Automatically generated patch to resolve security vulnerability.'}
+                </div>
+
+                <div className="vuln-meta-row">
+                  <div className="vmeta">
+                    <div className="vmeta-label">File Path</div>
+                    <div className="vmeta-val truncate max-w-xs">{patch.file_path}</div>
+                  </div>
+                  <div className="vmeta">
+                    <div className="vmeta-label">Verification Status</div>
+                    <div className={`vmeta-val flex items-center gap-1 ${patch.test_passed ? 'safe' : 'warn'}`}>
+                      {patch.test_passed ? <><CheckCircle className="w-3 h-3" /> Passed Sandbox</> : 'Awaiting Sandbox Result...'}
+                    </div>
+                  </div>
+                </div>
+
+                {patch.diff && (
+                  <>
+                    <div className="code-label">Unified Remediation Diff</div>
+                    <div className="code-block">
+                      <pre className="whitespace-pre-wrap text-xs md:text-sm">
+                        {patch.diff.split('\n').map((line, i) => {
+                          const color = line.startsWith('+') ? '#4ade80' : line.startsWith('-') ? '#f87171' : 'inherit';
+                          return <div key={i} style={{ color }}>{line}</div>;
+                        })}
+                      </pre>
+                    </div>
+                  </>
+                )}
+
+                {patch.test_output && (
+                  <>
+                    <div className="code-label">Sandbox Verification Output</div>
+                    <div className="code-block" style={{ backgroundColor: '#0a0a0a', borderColor: '#1e1e1e' }}>
+                      <pre className="whitespace-pre-wrap text-xs opacity-70 italic">{patch.test_output}</pre>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="ac-step">
-            <div className="ac-left"><div className="ac-dot green">✓</div><div className="ac-line"></div></div>
-            <div className="ac-content">
-              <div className="ac-title">Race Condition Exploit Execution (RedAgent)</div>
-              <div className="ac-detail">Fired 50 concurrent requests. 1 succeeded, 49 failed with 'Insufficient funds' or constraint lock wait timeout. Victim balance stable.</div>
-            </div>
-          </div>
-          <div className="ac-step" style={{ paddingBottom: 0 }}>
-            <div className="ac-left"><div className="ac-dot green">✓</div></div>
-            <div className="ac-content">
-              <div className="ac-title">Replay Attack Execution (RedAgent)</div>
-              <div className="ac-detail">Fired 20 sequential request replays. All 20 returned HTTP 200 via idempotency cache. No secondary debits observed.</div>
-            </div>
+          );
+        })
+      ) : (
+        <div className="sec">
+          <div className="vuln-card high text-center p-12">
+            <div className="text-xl text-gold-500 font-bold mb-2">No Patches Generated</div>
+            <p className="text-gold-200">The Blue Team has not yet generated any patches for this audit.</p>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="divider"></div>
 
       <div className="footer-row">
-        <Link to="/report/red-team/pr247" className="btn btn-ghost">← Back to Red Team findings</Link>
-        <Link to="/audit/1" className="btn btn-gold">Return to Dashboard</Link>
+        <Link to={`/report/red-team/${id}`} className="btn btn-ghost">← Back to Red Team findings</Link>
+        <Link to={`/audit/${id}`} className="btn btn-gold">Return to Dashboard</Link>
       </div>
     </div>
   );

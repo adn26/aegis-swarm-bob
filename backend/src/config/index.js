@@ -23,7 +23,7 @@ const config = {
   
   // AI Provider Configuration
   ai: {
-    provider: process.env.AI_PROVIDER || 'vertex-glm5', // vertex-glm5 | vertex-claude | vertex-gemini | openai | ollama
+    provider: process.env.AI_PROVIDER || 'vertex-claude', // vertex-glm5 | vertex-claude | vertex-gemini | openai | ollama
     
     // Google Vertex AI (Unified access to GLM-5, Claude & Gemini)
     vertexAI: {
@@ -87,13 +87,13 @@ const config = {
   
   // Agent-specific model assignments
   agents: {
-    // Red Team: Claude 4.6 Opus (Deep reasoning for vulnerability detection)
+    // Red Team: Claude 3.5 Sonnet (Deep reasoning for vulnerability detection)
     redTeam: {
-      provider: 'vertex-opus',
+      provider: 'vertex-sonnet',
       role: 'attacker',
       description: 'Deep security analysis and exploit generation',
     },
-    // Blue Team: Claude 4.5 Haiku (Fast patching)
+    // Blue Team: Claude 3.5 Haiku (Fast patching)
     blueTeam: {
       provider: 'vertex-haiku',
       role: 'defender',
@@ -121,7 +121,7 @@ const config = {
   
   // Docker
   docker: {
-    socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock',
+    socketPath: process.env.DOCKER_SOCKET || (process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock'),
     sandboxImage: process.env.SANDBOX_IMAGE || 'aegis-sandbox:latest',
     timeout: parseInt(process.env.SANDBOX_TIMEOUT || '30000', 10),
     memoryLimit: process.env.SANDBOX_MEMORY_LIMIT || '256m',

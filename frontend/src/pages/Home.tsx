@@ -1,12 +1,69 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { apiService } from '../services/api.service';
 import '../styles/command-center.css';
 
 function Home() {
+  const [repoUrl, setRepoUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const handleStartAudit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repoUrl) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiService.startAudit({ repoUrl });
+      if (response.success && response.data.auditId) {
+        navigate(`/audit/${response.data.auditId}`);
+      } else {
+        setError('Failed to start audit: No audit ID received');
+      }
+    } catch (err) {
+      console.error('Failed to start audit:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start audit');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendPrompt = (msg: string) => {
     console.log('Sending prompt:', msg);
   };
 
   return (
-    <div className="flex justify-center p-6 w-full">
+    <div className="flex flex-col items-center p-6 w-full max-w-4xl mx-auto">
+      <div className="w-full mb-8 cc-root p-6">
+        <h1 className="text-2xl font-bold text-gold-500 mb-4">Start New Security Audit</h1>
+        <form onSubmit={handleStartAudit} className="flex flex-col gap-4">
+          <div>
+            <label htmlFor="repoUrl" className="block text-sm font-medium text-gold-400 mb-1">
+              GitHub Repository URL
+            </label>
+            <input
+              id="repoUrl"
+              type="text"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              placeholder="https://github.com/username/repo"
+              className="w-full bg-black border border-gold-900/30 rounded px-4 py-2 text-gold-100 focus:outline-none focus:border-gold-500"
+              required
+            />
+          </div>
+          {error && <div className="text-red-500 text-sm">{error}</div>}
+          <button
+            type="submit"
+            disabled={loading || !repoUrl}
+            className="cc-btn cc-btn-gold self-start disabled:opacity-50"
+          >
+            {loading ? 'Starting...' : 'Start Audit ↗'}
+          </button>
+        </form>
+      </div>
+
       <div className="w-full">
         <div className="cc-root">
           <div className="cc-pr-header">
@@ -17,7 +74,7 @@ function Home() {
             </div>
             <div className="cc-pr-meta" style={{ marginLeft: 'auto', textAlign: 'right' }}>
               <div>adnan-dev → main</div>
-              <div>iWealthX · 3 files changed</div>
+              <div>Aegis Swarm · 3 files changed</div>
             </div>
           </div>
 
@@ -84,14 +141,14 @@ function Home() {
               </div>
               <div className="cc-code-block">
                 <span className="cmt">// exploit.js — double-spend via race</span><br />
-                <span className="kw">const</span> reqs = Array(50).fill(<span className="kw">null</span>).map({'() =>'}<br />
+                <span className="kw">const</span> reqs = Array(50).fill(<span className="kw">null</span>).map(() ={">"}<br />
                 &nbsp;&nbsp;fetch(<span className="str">'/api/v2/transfer'</span>, &#123;<br />
                 &nbsp;&nbsp;&nbsp;&nbsp;method: <span className="str">'POST'</span>,<br />
                 &nbsp;&nbsp;&nbsp;&nbsp;body: JSON.stringify(&#123; amount: 9999, to: <span className="str">'atk'</span> &#125;)<br />
                 &nbsp;&nbsp;&#125;)<br />
                 );<br />
                 <span className="kw">await</span> Promise.all(reqs);<br />
-                <span className="cmt">// Expected: balance < 0 → funds drained</span>
+                <span className="cmt">// Expected: balance {"<"} 0 → funds drained</span>
               </div>
               <div className="cc-log-entry">
                 <div className="cc-log-time">01:02:00</div>
@@ -116,11 +173,11 @@ function Home() {
               <div className="cc-code-block">
                 <span className="cmt">// patch: atomic lock on transfer</span><br />
                 <span className="kw">const</span> lock = <span className="kw">await</span> redis.set(<br />
-                &nbsp;&nbsp;<span className="str">`lock:$&#123;accountId&#125;`</span>, <span className="str">'1'</span>,<br />
+                &nbsp;&nbsp;<span className="str">`lock:&#36;&#123;accountId&#125;`</span>, <span className="str">'1'</span>,<br />
                 &nbsp;&nbsp;<span className="str">'NX'</span>, <span className="str">'PX'</span>, 3000<br />
                 );<br />
                 <span className="kw">if</span> (!lock) <span className="kw">throw</span> <span className="kw">new</span> Error(<span className="str">'Concurrent tx'</span>);<br />
-                <span className="kw">await</span> db.transaction(<span className="kw">async</span> (trx) {'=>'} &#123;<br />
+                <span className="kw">await</span> db.transaction(<span className="kw">async</span> (trx) ={">"} &#123;<br />
                 &nbsp;&nbsp;<span className="kw">await</span> trx.raw(<span className="str">'SELECT ... FOR UPDATE'</span>);<br />
                 &nbsp;&nbsp;<span className="cmt">// debit only after lock acquired</span><br />
                 &#125;);

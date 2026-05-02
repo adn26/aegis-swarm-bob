@@ -83,7 +83,7 @@ export const scanFilesNode = async (state) => {
     // Update audit statistics
     await storageService.updateAudit(state.auditId, {
       totalFiles: files.length,
-      status: 'analyzing',
+      status: 'analyzing', // Start Red Team phase
     });
 
     // Send SSE event

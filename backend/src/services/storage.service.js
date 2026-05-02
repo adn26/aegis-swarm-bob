@@ -352,6 +352,38 @@ class StorageService {
   // ==================== STATISTICS ====================
 
   /**
+   * Update a specific patch
+   */
+  async updatePatch(id, data) {
+    try {
+      const updates = {};
+
+      if (data.testPassed !== undefined) updates.test_passed = data.testPassed;
+      if (data.testOutput !== undefined) updates.test_output = data.testOutput;
+      if (data.patchedCode !== undefined) updates.patched_code = data.patchedCode;
+      if (data.diff !== undefined) updates.diff = data.diff;
+
+      if (Object.keys(updates).length === 0) {
+        return null;
+      }
+
+      const { data: patch, error } = await this.supabase
+        .from('patches')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return patch;
+    } catch (error) {
+      logger.error(`Failed to update patch ${id}:`, error);
+      throw new DatabaseError(`Failed to update patch ${id}`, error.message);
+    }
+  }
+
+  /**
    * Get audit statistics
    */
   async getAuditStats(auditId) {

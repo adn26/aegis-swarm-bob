@@ -1,188 +1,174 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { Loader2, AlertCircle, ArrowLeft, Bug, Shield, Terminal, Zap } from 'lucide-react';
+import { apiService } from '../services/api.service';
+import { Audit, Vulnerability } from '../types/audit.types';
 import '../styles/reports.css';
 
 const RedTeamReport: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const [audit, setAudit] = useState<Audit | null>(null);
+  const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchReportData = async () => {
+      try {
+        setLoading(true);
+        const [auditData, vulns] = await Promise.all([
+          apiService.getAudit(id),
+          apiService.getVulnerabilities(id),
+        ]);
+        setAudit(auditData);
+        setVulnerabilities(vulns);
+      } catch (err) {
+        console.error('Failed to fetch report:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load report');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReportData();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <Loader2 className="w-12 h-12 animate-spin text-gold-500" />
+      </div>
+    );
+  }
+
+  if (error || !audit) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-black">
+        <div className="max-w-md w-full bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-500 mb-2">Failed to Load Report</h2>
+          <p className="text-red-400 mb-4">{error || 'Audit not found'}</p>
+          <Link to="/" className="cc-btn cc-btn-gold inline-flex items-center">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="report-container">
       <div className="rh">
         <div>
           <div className="rtitle">Red Team — Exploit Report</div>
-          <div className="rname">PR #247 — feat: concurrent withdrawal endpoint</div>
-          <div className="rmeta">Analyzed by: Aegis/RedAgent v2.1 &nbsp;|&nbsp; 2025-07-12 01:02 UTC &nbsp;|&nbsp; adnan-dev → main</div>
+          <div className="rname">Audit #{audit.id.slice(0, 8)} — {audit.repo_url}</div>
+          <div className="rmeta">
+            Analyzed by: Aegis Swarm &nbsp;|&nbsp; 
+            {audit.completed_at ? new Date(audit.completed_at).toLocaleString() : 'In Progress'} &nbsp;|&nbsp; 
+            {audit.branch || 'main'}
+          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div className="risk-badge risk-critical" style={{ marginBottom: '6px' }}>CRITICAL RISK</div>
-          <div style={{ fontSize: '9px', color: '#3a2c10' }}>2 vulnerabilities found</div>
+          <div className={`risk-badge ${audit.critical_count > 0 ? 'risk-critical' : 'risk-high'}`}>
+            {audit.critical_count > 0 ? 'CRITICAL RISK' : 'HIGH RISK'}
+          </div>
+          <div style={{ fontSize: '9px', color: '#3a2c10' }}>{vulnerabilities.length} vulnerabilities found</div>
         </div>
       </div>
 
       <div className="sec">
-        <div className="sec-label">Vulnerability 01 — Critical</div>
-        <div className="vuln-card critical">
-          <div className="vuln-top">
-            <span className="vuln-id">CVE-CLASS: CWE-362</span>
-            <span className="vuln-name">Race condition — double-spend via concurrent debit</span>
-            <span className="risk-badge risk-critical">Critical</span>
-          </div>
-          <div className="vuln-desc">
-            The <span style={{ color: '#c9a84c' }}>POST /api/v2/transfer</span> handler reads account balance, checks sufficiency, then debits in three separate non-atomic operations. No mutex or DB-level row lock is held between the read and the write. An attacker who fires N concurrent requests before any debit commits can drain an account to a deeply negative balance — effectively stealing multiples of the available funds.
-          </div>
-          <div className="vuln-meta-row">
-            <div className="vmeta">
-              <div className="vmeta-label">Attack surface</div>
-              <div className="vmeta-val danger">Unauthenticated POST</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Complexity</div>
-              <div className="vmeta-val warn">Low — trivial to automate</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Max loss (est.)</div>
-              <div className="vmeta-val danger">Unbounded</div>
-            </div>
-          </div>
-
-          <div className="code-label">Vulnerable code path — transferController.js</div>
-          <div className="code-block" style={{ marginBottom: '10px' }}>
-            <span className="cmt">// VULNERABLE — no lock between read and write</span><br />
-            <span className="kw">const</span> account = <span className="kw">await</span> <span className="fn">db.accounts.findOne</span>({'{'} id: userId {'}'});<br />
-            <span className="kw">if</span> (account.balance {"<"} amount) <span className="kw">throw</span> <span className="fn">Error</span>(<span className="str">'Insufficient funds'</span>);<br />
-            <span className="cmt">// ← attacker's 49 parallel reqs pass this check simultaneously</span><br />
-            <span className="kw">await</span> <span className="fn">db.accounts.update</span>({'{'} id: userId {'}'},<br />
-            &nbsp;&nbsp;{'{'} balance: account.balance - amount {'}'});<span className="cmt"> // ← all 50 debit same value</span>
-          </div>
-
-          <div className="code-label">Proof-of-concept exploit — exploit_race.js</div>
-          <div className="code-block">
-            <span className="cmt">// Fire 50 concurrent transfers before any DB commit lands</span><br />
-            <span className="kw">const</span> SESSION = <span className="str">'Bearer eyJhb...'</span>; <span className="cmt">// valid token, balance: ₹10,000</span><br />
-            <span className="kw">const</span> TARGET = <span className="str">'attacker-wallet-id'</span>;<br /><br />
-            <span className="kw">const</span> fire = () {'='}{'>'} <span className="fn">fetch</span>(<span className="str">'/api/v2/transfer'</span>, {'{'}<br />
-            &nbsp;&nbsp;method: <span className="str">'POST'</span>,<br />
-            &nbsp;&nbsp;headers: {'{'} <span className="str">Authorization</span>: SESSION, <span className="str">'Content-Type'</span>: <span className="str">'application/json'</span> {'}'},<br />
-            &nbsp;&nbsp;body: <span className="fn">JSON.stringify</span>({'{'} to: TARGET, amount: <span className="num">9999</span> {'}'})<br />
-            {'}'});<br /><br />
-            <span className="kw">const</span> results = <span className="kw">await</span> <span className="fn">Promise.all</span>(<span className="fn">Array</span>(<span className="num">50</span>).<span className="fn">fill</span>().<span className="fn">map</span>(fire));<br />
-            <span className="kw">const</span> success = results.<span className="fn">filter</span>(r {'='}{'>'} r.ok).<span className="fn">length</span>;<br /><br />
-            <span className="cmt">// OBSERVED RESULT — sandbox run #1:</span><br />
-            <span className="cmt">// success: 47/50 requests &nbsp;→&nbsp; ₹9,999 × 47 transferred</span><br />
-            <span className="danger-txt">// victim balance: ₹10,000 − ₹469,953 = −₹459,953</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="sec">
-        <div className="sec-label">Vulnerability 02 — High</div>
+        <div className="sec-label">Threat Analysis Overview</div>
         <div className="vuln-card high">
-          <div className="vuln-top">
-            <span className="vuln-id">CVE-CLASS: CWE-294</span>
-            <span className="vuln-name">Missing idempotency key — replay attack across sessions</span>
-            <span className="risk-badge risk-high">High</span>
-          </div>
-          <div className="vuln-desc">
-            The transfer endpoint accepts no idempotency key. A previously captured valid request body (with a still-valid auth token) can be replayed across multiple sessions or after a network timeout retry. There is no deduplication at the server — each replay is treated as a fresh, independent transaction.
-          </div>
-          <div className="vuln-meta-row">
-            <div className="vmeta">
-              <div className="vmeta-label">Attack surface</div>
-              <div className="vmeta-val warn">Captured HTTP request</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Window</div>
-              <div className="vmeta-val warn">Token lifetime (~1hr)</div>
-            </div>
-            <div className="vmeta">
-              <div className="vmeta-label">Requires</div>
-              <div className="vmeta-val">Network intercept / retry</div>
-            </div>
-          </div>
-          <div className="code-label">Proof-of-concept exploit — exploit_replay.js</div>
-          <div className="code-block">
-            <span className="cmt">// Replay a captured successful transfer N times</span><br />
-            <span className="kw">const</span> captured = {'{'} <span className="cmt">/* sniffed from mobile client */</span><br />
-            &nbsp;&nbsp;headers: {'{'} <span className="str">Authorization</span>: <span className="str">'Bearer eyJhb...'</span> {'}'},<br />
-            &nbsp;&nbsp;body: <span className="str">'{"{"}"to":"attacker","amount":500{"}"}'</span><br />
-            {'}'};<br /><br />
-            <span className="kw">for</span> (<span className="kw">let</span> i = <span className="num">0</span>; i {"<"} <span className="num">20</span>; i++) {'{'}<br />
-            &nbsp;&nbsp;<span className="kw">await</span> <span className="fn">fetch</span>(<span className="str">'/api/v2/transfer'</span>, {'{'} method: <span className="str">'POST'</span>, ...captured {'}'});<br />
-            &nbsp;&nbsp;<span className="kw">await</span> <span className="fn">new</span> <span className="fn">Promise</span>(r {'='}{'>'} <span className="fn">setTimeout</span>(r, <span className="num">200</span>));<br />
-            {'}'}<br />
-            <span className="cmt">// Each replayed request debits ₹500 independently</span><br />
-            <span className="danger-txt">// total drained: ₹500 × 20 = ₹10,000 — full account balance</span>
-          </div>
+          <p className="text-gold-200">
+            The Red Team has completed a deep-dive security analysis of the repository. 
+            A total of <span className="text-red-500 font-bold">{vulnerabilities.length}</span> security flaws were identified.
+            The primary attack vectors discovered include <span className="text-white italic">{Array.from(new Set(vulnerabilities.map(v => v.type))).slice(0, 3).join(', ')}</span>.
+          </p>
         </div>
       </div>
 
-      <div className="sec">
-        <div className="sec-label">Attack chain — step by step</div>
-        <div className="attack-chain">
-          <div className="ac-step">
-            <div className="ac-left"><div className="ac-dot red">1</div><div className="ac-line"></div></div>
-            <div className="ac-content">
-              <div className="ac-title">Attacker obtains a valid session token</div>
-              <div className="ac-detail">Registers a legitimate account. Token is long-lived (~1 hr). No rate limit on /transfer observed.</div>
+      {vulnerabilities.length > 0 ? (
+        vulnerabilities.map((vuln, index) => (
+          <div className="sec" key={vuln.id}>
+            <div className="sec-label">Vulnerability {String(index + 1).padStart(2, '0')} — {vuln.severity}</div>
+            <div className={`vuln-card ${vuln.severity.toLowerCase()}`}>
+              <div className="vuln-top">
+                <span className="vuln-id flex items-center gap-1">
+                  <Bug className="w-3 h-3" /> {vuln.cwe_id || 'CWE-Unknown'}
+                </span>
+                <span className="vuln-name">{vuln.type}</span>
+                <span className={`risk-badge risk-${vuln.severity.toLowerCase()}`}>{vuln.severity}</span>
+              </div>
+              <div className="vuln-desc p-4 bg-black/40 rounded border border-red-500/10 mb-4">
+                <div className="flex items-start gap-2">
+                  <Shield className="w-4 h-4 text-red-500 mt-1 flex-shrink-0" />
+                  <span>{vuln.description}</span>
+                </div>
+              </div>
+              <div className="vuln-meta-row">
+                <div className="vmeta">
+                  <div className="vmeta-label">File Path</div>
+                  <div className="vmeta-val truncate max-w-xs">{vuln.file_path}</div>
+                </div>
+                <div className="vmeta">
+                  <div className="vmeta-label">Location</div>
+                  <div className="vmeta-val">Line {vuln.line_number || 'N/A'}</div>
+                </div>
+                <div className="vmeta">
+                  <div className="vmeta-label">CVSS</div>
+                  <div className={`vmeta-val font-bold ${vuln.cvss_score && vuln.cvss_score > 7 ? 'text-red-500' : 'text-orange-500'}`}>
+                    {vuln.cvss_score || '5.0'}
+                  </div>
+                </div>
+              </div>
+
+              {vuln.exploit_code && (
+                <>
+                  <div className="code-label flex items-center gap-2">
+                    <Terminal className="w-3 h-3" /> Proof-of-concept exploit evidence
+                  </div>
+                  <div className="code-block" style={{ borderLeftColor: '#ef4444' }}>
+                    <pre className="whitespace-pre-wrap text-red-400 font-mono text-sm">
+                      {vuln.exploit_code}
+                    </pre>
+                  </div>
+                </>
+              )}
+
+              <div className="mt-4">
+                <div className="code-label flex items-center gap-2">
+                  <Terminal className="w-3 h-3" /> Vulnerable Code Section
+                </div>
+                <div className="code-block" style={{ borderLeftColor: '#ef4444', background: '#0a0505' }}>
+                  <pre className="whitespace-pre-wrap text-red-200/70 font-mono text-xs">
+                    {`File: ${vuln.file_path}:${vuln.line_number}\n\n// ... scanning code context ...\n// Vulnerability detected in this segment\n`}
+                    {/* Note: In a real app, we would fetch the actual code snippet from the backend */}
+                  </pre>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-2 bg-gold-500/5 rounded text-[10px] text-gold-500/50 uppercase tracking-widest flex items-center gap-2">
+                <Zap className="w-3 h-3" /> Detected via Swarm Intelligence Analysis
+              </div>
             </div>
           </div>
-          <div className="ac-step">
-            <div className="ac-left"><div className="ac-dot red">2</div><div className="ac-line"></div></div>
-            <div className="ac-content">
-              <div className="ac-title">Fires 50 concurrent requests using Promise.all</div>
-              <div className="ac-detail">All 50 hit the server within a ~12ms window. All 50 read the same stale balance before any write commits.</div>
-            </div>
-          </div>
-          <div className="ac-step">
-            <div className="ac-left"><div className="ac-dot red">3</div><div className="ac-line"></div></div>
-            <div className="ac-content">
-              <div className="ac-title">DB writes race — 47 succeed, 3 fail on constraint</div>
-              <div className="ac-detail">Without SELECT FOR UPDATE, Postgres processes all 47 concurrent updates. Each subtracts the same starting balance.</div>
-            </div>
-          </div>
-          <div className="ac-step">
-            <div className="ac-left"><div className="ac-dot amber">4</div><div className="ac-line"></div></div>
-            <div className="ac-content">
-              <div className="ac-title">Victim balance is now −₹459,953</div>
-              <div className="ac-detail">Platform absorbs the loss. Attacker wallet receives ₹469,953 from a ₹10,000 source account.</div>
-            </div>
-          </div>
-          <div className="ac-step" style={{ paddingBottom: 0 }}>
-            <div className="ac-left"><div className="ac-dot amber">5</div></div>
-            <div className="ac-content">
-              <div className="ac-title">Secondary: replays extend the attack window</div>
-              <div className="ac-detail">If token is reused or intercepted, Vuln 02 allows further draining post-patch of Vuln 01 if idempotency is not addressed simultaneously.</div>
-            </div>
+        ))
+      ) : (
+        <div className="sec">
+          <div className="vuln-card safe text-center p-12">
+            <div className="text-xl text-gold-500 font-bold mb-2">No Vulnerabilities Found</div>
+            <p className="text-gold-200">The Red Team did not find any critical or high severity vulnerabilities in this audit.</p>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="divider"></div>
 
-      <div className="sec">
-        <div className="sec-label">Estimated business impact</div>
-        <div className="impact-grid">
-          <div className="impact-item">
-            <div className="impact-label">Financial exposure</div>
-            <div className="impact-val red">Unlimited — platform absorbs negative balances</div>
-          </div>
-          <div className="impact-item">
-            <div className="impact-label">Regulatory risk</div>
-            <div className="impact-val">RBI PPI guidelines §7.3 — mandatory incident report within 6 hrs</div>
-          </div>
-          <div className="impact-item">
-            <div className="impact-label">Attack automation difficulty</div>
-            <div className="impact-val red">Trivial — 15 lines of JS, no special tooling</div>
-          </div>
-          <div className="impact-item">
-            <div className="impact-label">Detection without this audit</div>
-            <div className="impact-val red">Zero — no linter or SAST tool catches race conditions</div>
-          </div>
-        </div>
-      </div>
-
       <div className="footer-row">
-        <Link to="/report/blue-team/pr247" className="btn btn-gold">View Blue Team patch ↗</Link>
-        <button className="btn btn-ghost" onClick={() => alert('Sandbox verdict requested')}>Sandbox verdict ↗</button>
-        <button className="btn btn-ghost" onClick={() => alert('Adding rate limiting')}>Add rate limiting ↗</button>
+        <Link to={`/report/blue-team/${id}`} className="btn btn-gold">Review Remediation Plan ↗</Link>
+        <Link to={`/audit/${id}`} className="btn btn-ghost">Back to Dashboard</Link>
       </div>
     </div>
   );

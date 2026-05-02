@@ -176,6 +176,7 @@
 - **Database**: Supabase (PostgreSQL)
 - **Agent Orchestration**: @langchain/langgraph
 - **AI Providers** (Provider-agnostic):
+  - Vertex AI (GCP)
   - OpenAI SDK (@openai/api)
   - Anthropic SDK (@anthropic-ai/sdk)
   - LangChain integrations

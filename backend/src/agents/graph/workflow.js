@@ -5,191 +5,127 @@ import logger from '../../utils/logger.js';
 // Import node implementations
 import { cloneRepositoryNode } from '../nodes/clone.node.js';
 import { scanFilesNode } from '../nodes/scan.node.js';
+import { fastAnalysisNode } from '../nodes/fast-analysis.node.js';
 import { redTeamAnalysisNode } from '../nodes/redteam.node.js';
 import { blueTeamPatchNode } from '../nodes/blueteam.node.js';
 import { sandboxTestNode } from '../nodes/sandbox.node.js';
 import { finalizeAuditNode } from '../nodes/finalize.node.js';
 
 /**
- * Helper node to move to next file
+ * Node to prepare for the next phase
  */
-const moveToNextFileNode = async (state) => {
-  logger.info(`Moving to next file. Current index: ${state.currentFileIndex}`);
-  return moveToNextFile(state);
+const preparePhaseNode = (phaseName) => async (state) => {
+  logger.info(`Switching phase to: ${phaseName}`);
+  return {
+    ...state,
+    currentFileIndex: 0,
+    currentFile: state.files.length > 0 ? state.files[0] : null,
+    currentStep: `start_${phaseName}`,
+  };
 };
 
 /**
  * Create the Aegis Swarm workflow graph
  * 
- * Workflow:
+ * SEQUENTIAL Workflow:
  * 1. Clone repository
  * 2. Scan files
- * 3. For each file:
- *    a. Red Team analyzes for vulnerabilities
- *    b. If vulnerabilities found, Blue Team generates patches
- *    c. Sandbox tests patches
- * 4. Finalize audit and generate report
+ * 3. PHASE 1: Red Team analyzes ALL files
+ * 4. PHASE 2: Blue Team generates patches for ALL found vulnerabilities
+ * 5. PHASE 3: Sandbox tests ALL generated patches
+ * 6. Finalize audit and generate report
  */
 export const createAuditWorkflow = () => {
-  // Create the state graph
   const workflow = new StateGraph(AuditState);
 
   // Add nodes
   workflow.addNode('clone_repository', cloneRepositoryNode);
   workflow.addNode('scan_files', scanFilesNode);
+  workflow.addNode('fast_analysis', fastAnalysisNode);
+  
+  // Phase 1 Nodes
   workflow.addNode('redteam_analysis', redTeamAnalysisNode);
-  workflow.addNode('move_to_next_file', moveToNextFileNode);
+  workflow.addNode('redteam_next_file', async (state) => moveToNextFile(state));
+  
+  // Phase 2 Nodes
+  workflow.addNode('prepare_blueteam', preparePhaseNode('blueteam'));
   workflow.addNode('blueteam_patch', blueTeamPatchNode);
+  workflow.addNode('blueteam_next_file', async (state) => moveToNextFile(state));
+  
+  // Phase 3 Nodes
+  workflow.addNode('prepare_sandbox', preparePhaseNode('sandbox'));
   workflow.addNode('sandbox_test', sandboxTestNode);
+  workflow.addNode('sandbox_next_file', async (state) => moveToNextFile(state));
+  
   workflow.addNode('finalize_audit', finalizeAuditNode);
 
-  // Set entry point
+  // --- Graph Edges ---
+
+  // Entry
   workflow.addEdge('__start__', 'clone_repository');
 
-  // Define edges - check for failures after clone
+  // Clone -> Scan
   workflow.addConditionalEdges(
     'clone_repository',
-    shouldContinueAfterClone,
-    {
-      continue: 'scan_files',
-      end: END,
-    }
+    (state) => (state.status === 'failed' ? 'end' : 'continue'),
+    { continue: 'scan_files', end: END }
   );
   
-  // After scanning files, start Red Team analysis
-  workflow.addEdge('scan_files', 'redteam_analysis');
+  // Scan -> Fast Analysis -> Red Team
+  workflow.addEdge('scan_files', 'fast_analysis');
+  workflow.addEdge('fast_analysis', 'redteam_analysis');
 
-  // Conditional edge after Red Team analysis
+  // Red Team Loop
   workflow.addConditionalEdges(
     'redteam_analysis',
-    shouldContinueScanning,
+    (state) => (state.currentFileIndex + 1 >= state.files.length ? 'next_phase' : 'continue'),
     {
-      continue: 'move_to_next_file', // More files to scan, move to next
-      patch: 'blueteam_patch',       // Vulnerabilities found, generate patches
-      finalize: 'finalize_audit',    // No more files, finalize
+      continue: 'redteam_next_file',
+      next_phase: 'prepare_blueteam'
     }
   );
+  workflow.addEdge('redteam_next_file', 'redteam_analysis');
 
-  // After moving to next file, analyze it
-  workflow.addEdge('move_to_next_file', 'redteam_analysis');
+  // Blue Team Loop
+  workflow.addEdge('prepare_blueteam', 'blueteam_patch');
+  workflow.addConditionalEdges(
+    'blueteam_patch',
+    (state) => (state.currentFileIndex + 1 >= state.files.length ? 'next_phase' : 'continue'),
+    {
+      continue: 'blueteam_next_file',
+      next_phase: 'prepare_sandbox'
+    }
+  );
+  workflow.addEdge('blueteam_next_file', 'blueteam_patch');
 
-  // After Blue Team patches, test in sandbox
-  workflow.addEdge('blueteam_patch', 'sandbox_test');
-
-  // After sandbox testing, continue to next file or finalize
+  // Sandbox Loop
+  workflow.addEdge('prepare_sandbox', 'sandbox_test');
   workflow.addConditionalEdges(
     'sandbox_test',
-    shouldContinueAfterTest,
+    (state) => (state.currentFileIndex + 1 >= state.files.length ? 'next_phase' : 'continue'),
     {
-      continue: 'move_to_next_file', // More files to scan
-      finalize: 'finalize_audit',    // All files scanned
+      continue: 'sandbox_next_file',
+      next_phase: 'finalize_audit'
     }
   );
+  workflow.addEdge('sandbox_next_file', 'sandbox_test');
 
-  // Finalize ends the workflow
+  // Finalize
   workflow.addEdge('finalize_audit', END);
 
-  // Compile the graph
   const app = workflow.compile();
-
-  logger.info('Aegis Swarm workflow graph compiled successfully');
-
+  logger.info('Aegis Swarm sequential workflow graph compiled');
   return app;
 };
 
 /**
- * Conditional edge function: Should continue after clone?
- *
- * Returns:
- * - 'continue': Clone successful, proceed to scanning
- * - 'end': Clone failed, stop workflow
- */
-const shouldContinueAfterClone = (state) => {
-  if (state.status === 'failed' || state.error) {
-    logger.error('Clone failed, stopping workflow');
-    return 'end';
-  }
-  return 'continue';
-};
-
-/**
- * Conditional edge function: Should continue scanning files?
- *
- * Returns:
- * - 'continue': More files to scan, no serious vulnerabilities in current file
- * - 'patch': Critical/High severity vulnerabilities found, need to generate patches
- * - 'finalize': All files scanned
- */
-const shouldContinueScanning = (state) => {
-  // Check if current file has vulnerabilities
-  const currentFileVulns = state.vulnerabilities.filter(
-    v => v.filePath === state.currentFile?.path
-  );
-
-  // Only patch Critical or High severity — skip Medium/Low for speed
-  const seriousVulns = currentFileVulns.filter(
-    v => v.severity === 'Critical' || v.severity === 'High'
-  );
-
-  if (seriousVulns.length > 0) {
-    logger.info(`${seriousVulns.length} serious vulnerabilities found in ${state.currentFile?.path}, generating patches`);
-    return 'patch';
-  }
-
-  // No serious vulnerabilities in current file, move to next file
-  const nextIndex = state.currentFileIndex + 1;
-  
-  // Check if there are more files to scan
-  if (nextIndex >= state.files.length) {
-    logger.info('All files scanned, finalizing audit');
-    return 'finalize';
-  }
-
-  // Continue to next file
-  if (currentFileVulns.length > 0) {
-    logger.info(`${currentFileVulns.length} low-priority vulnerabilities in ${state.currentFile?.path}, skipping patches`);
-  } else {
-    logger.info(`No vulnerabilities in ${state.currentFile?.path}, continuing to next file`);
-  }
-  return 'continue';
-};
-
-/**
- * Conditional edge function: Should continue after sandbox test?
- *
- * Returns:
- * - 'continue': More files to scan
- * - 'finalize': All files scanned
- */
-const shouldContinueAfterTest = (state) => {
-  // Move to next file after testing current file's patches
-  const nextIndex = state.currentFileIndex + 1;
-  
-  // Check if there are more files to scan
-  if (nextIndex >= state.files.length) {
-    logger.info('All files scanned after testing, finalizing audit');
-    return 'finalize';
-  }
-
-  logger.info('Continuing to next file after testing');
-  return 'continue';
-};
-
-/**
  * Run the audit workflow
- *
- * @param {Object} auditData - Initial audit data
- * @param {Function} onUpdate - Callback for state updates
- * @returns {Promise<Object>} Final state
  */
 export const runAuditWorkflow = async (auditData, onUpdate = null) => {
   try {
-    logger.info(`Starting audit workflow for: ${auditData.repoUrl}`);
-
-    // Create workflow
+    logger.info(`Starting sequential audit workflow for: ${auditData.repoUrl}`);
     const app = createAuditWorkflow();
 
-    // Create initial state
     const initialState = {
       auditId: auditData.auditId,
       repoUrl: auditData.repoUrl,
@@ -204,6 +140,7 @@ export const runAuditWorkflow = async (auditData, onUpdate = null) => {
       testResults: [],
       status: 'running',
       currentStep: 'init',
+      fastMode: auditData.fastMode !== false, // Default to true if not specified
       error: null,
       stats: {
         totalFiles: 0,
@@ -219,36 +156,17 @@ export const runAuditWorkflow = async (auditData, onUpdate = null) => {
       messages: [],
     };
 
-    // Use streaming to get updates after each node execution
-    logger.info('Starting workflow stream...');
     let finalState = initialState;
+    const stream = await app.stream(initialState, { recursionLimit: 1000 });
     
-    // Stream the workflow execution with increased recursion limit
-    const stream = await app.stream(initialState, {
-      recursionLimit: 500, // Allow up to 500 iterations for large repos (handles ~125 files with patching)
-    });
-    
-    // Process each state update
     for await (const output of stream) {
-      // output is an object with node names as keys
-      // e.g., { clone_repository: { ...state } }
       const nodeName = Object.keys(output)[0];
       const state = output[nodeName];
-      
-      logger.info(`Node '${nodeName}' completed, status: ${state.status}`);
-      
-      // Update final state
       finalState = state;
-      
-      // Call update callback if provided
-      if (onUpdate) {
-        await onUpdate(state);
-      }
+      if (onUpdate) await onUpdate(state);
     }
 
-    logger.info(`Audit workflow completed for: ${auditData.repoUrl}`);
     return finalState;
-
   } catch (error) {
     logger.error('Audit workflow error:', error);
     throw error;
@@ -256,5 +174,3 @@ export const runAuditWorkflow = async (auditData, onUpdate = null) => {
 };
 
 export default { createAuditWorkflow, runAuditWorkflow };
-
-// Made with Bob

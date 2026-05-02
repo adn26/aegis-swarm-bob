@@ -5,6 +5,7 @@ import { getLangChainModel } from '../../services/ai-provider.service.js';
 import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
+import { robustParseJSON } from '../../utils/json.js';
 import { addPatch, addMessage } from '../graph/state.js';
 
 /**
@@ -30,6 +31,11 @@ export const blueTeamPatchNode = async (state) => {
       return state;
     }
 
+    // Update status for sequential flow
+    if (state.currentStep === 'start_blueteam' || state.currentFileIndex === 0) {
+       await storageService.updateAudit(state.auditId, { status: 'patching' });
+    }
+
     logger.info(`Blue Team patching ${fileVulnerabilities.length} vulnerabilities in ${file.path}`);
 
     // Send SSE event
@@ -49,7 +55,7 @@ export const blueTeamPatchNode = async (state) => {
     // Generate patches for all vulnerabilities in this file
     const prompt = createBlueTeamPrompt(file.path, fileContent, fileVulnerabilities, file.language);
 
-    // Generate patches with AI using proper LangChain message instances
+    // Generate patches with AI
     const response = await model.invoke([
       new SystemMessage('You are a Blue Team security expert. Respond only with valid JSON arrays as instructed.'),
       new HumanMessage(prompt)
@@ -64,17 +70,17 @@ export const blueTeamPatchNode = async (state) => {
     let updatedState = state;
 
     for (const patch of patches) {
-      // Try exact line match first, then fuzzy match, then just use first vuln
+      // Find the specific vulnerability by line number
       const vulnerability =
         fileVulnerabilities.find(v => v.lineNumber === patch.lineNumber) ||
         fileVulnerabilities.find(v =>
           Math.abs((v.lineNumber || 0) - (patch.lineNumber || 0)) <= 5
         ) ||
-        fileVulnerabilities[0]; // fallback — always link to something
+        fileVulnerabilities[0];
 
-      if (!vulnerability?.id) {
-        logger.warn(`No vulnerability match for patch at line ${patch.lineNumber}, skipping`);
-        continue; // skip instead of crashing
+      if (!vulnerability || !vulnerability.id) {
+        logger.warn(`No vulnerability ID found for patch at line ${patch.lineNumber}, skipping`);
+        continue;
       }
 
       try {
@@ -87,7 +93,7 @@ export const blueTeamPatchNode = async (state) => {
           patchedCode: patch.patchedCode,
           diff: patch.diff,
           explanation: patch.explanation,
-          testPassed: false, // Will be updated after sandbox testing
+          testPassed: false,
         });
 
         // Add to state
@@ -97,15 +103,14 @@ export const blueTeamPatchNode = async (state) => {
           vulnerabilityId: vulnerability.id,
         });
 
-        // Send SSE event for each patch
+        // Send SSE event
         sseService.sendPatchGenerated(state.auditId, {
-          filePath: patch.filePath,
-          vulnerabilityType: vulnerability.type,
-          severity: vulnerability.severity,
+          id: dbPatch.id,
+          file_path: patch.filePath,
+          vulnerability_id: vulnerability.id,
           explanation: patch.explanation,
         });
       } catch (patchErr) {
-        // Log but don't crash the whole node — keep processing remaining patches
         logger.warn(`Skipped patch for ${patch.filePath}:${patch.lineNumber} — ${patchErr.message}`);
       }
     }
@@ -124,15 +129,11 @@ export const blueTeamPatchNode = async (state) => {
 
   } catch (error) {
     logger.error('Blue Team patching failed:', error);
-
-    // Send error event
     sseService.sendError(state.auditId, {
       message: 'Blue Team patching failed',
       error: error.message,
       file: state.currentFile?.path,
     });
-
-    // Return state on error (workflow will handle moving to next file)
     return addMessage(state, {
       role: 'system',
       content: `Patching failed for ${state.currentFile?.path}: ${error.message}`,
@@ -162,40 +163,20 @@ ${fileContent}
 **Vulnerabilities to Fix**:
 ${vulnList}
 
-**Task**: Generate secure patches for each vulnerability. Follow security best practices:
-
-**Security Principles**:
-- Input validation and sanitization
-- Parameterized queries (prevent SQL injection)
-- Output encoding (prevent XSS)
-- Proper authentication and authorization
-- Secure configuration
-- Rate limiting and resource controls
-- Error handling without information disclosure
-- Principle of least privilege
-
-**For AI-Specific Issues**:
-- Validate and sanitize user input before LLM prompts
-- Implement rate limiting and token budgets
-- Never expose API keys or credentials
-- Validate LLM outputs before execution
-- Implement content filtering
-- Use secure prompt templates
+**Task**: Generate secure patches for each vulnerability. Follow security best practices.
 
 **Response Format** (JSON array):
-\`\`\`json
 [
   {
     "lineNumber": 42,
     "originalCode": "const query = 'SELECT * FROM users WHERE id = ' + userId;",
     "patchedCode": "const query = 'SELECT * FROM users WHERE id = ?';\\nconst result = await db.query(query, [userId]);",
-    "diff": "- const query = 'SELECT * FROM users WHERE id = ' + userId;\\n+ const query = 'SELECT * FROM users WHERE id = ?';\\n+ const result = await db.query(query, [userId]);",
-    "explanation": "Replaced string concatenation with parameterized query to prevent SQL injection. The user input is now safely passed as a parameter."
+    "diff": "--- ${filePath}\\n+++ ${filePath}\\n@@ -42,1 +42,2 @@\\n-const query = 'SELECT * FROM users WHERE id = ' + userId;\\n+const query = 'SELECT * FROM users WHERE id = ?';\\n+const result = await db.query(query, [userId]);",
+    "explanation": "Replaced string concatenation with parameterized query to prevent SQL injection."
   }
 ]
-\`\`\`
 
-Generate complete, working patches that fix the vulnerabilities while maintaining functionality.`;
+Generate complete, working patches. Use standard unified diff format for the "diff" field.`;
 };
 
 /**
@@ -203,46 +184,13 @@ Generate complete, working patches that fix the vulnerabilities while maintainin
  */
 const parsePatches = (response, filePath) => {
   try {
-    if (!response || typeof response !== 'string') return [];
-
-    // Extract JSON array — try fenced block first, then bare array
-    let jsonStr = null;
-
-    const fenced = response.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
-    if (fenced) {
-      jsonStr = fenced[1];
-    } else {
-      const bare = response.match(/(\[[\s\S]*\])/);
-      if (bare) jsonStr = bare[1];
-    }
-
-    if (!jsonStr) {
-      logger.warn('No JSON array found in Blue Team response, treating as no patches');
-      return [];
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      logger.warn('JSON parse failed in Blue Team response, treating as no patches');
-      return [];
-    }
-
+    const parsed = robustParseJSON(response, []);
     if (!Array.isArray(parsed)) return [];
-    
-    // Add filePath to each patch
-    return parsed.map(patch => ({
-      ...patch,
-      filePath,
-    }));
-
+    return parsed.map((patch) => ({ ...patch, filePath }));
   } catch (error) {
-    logger.error('Failed to parse patches:', error);
+    logger.error(`Failed to parse patches for ${filePath}:`, error);
     return [];
   }
 };
 
 export default blueTeamPatchNode;
-
-// Made with Bob

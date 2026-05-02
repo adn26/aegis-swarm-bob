@@ -81,9 +81,10 @@ class VertexGLM5Provider extends AIProvider {
       logger.info('Fetching fresh gcloud access token...');
       const token = execSync('gcloud auth print-access-token', {
         encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'] // Suppress stderr
-      }).trim();
-      
+        stdio: ['pipe', 'pipe', 'pipe'], // Suppress stderr
+        shell: true
+      }).toString().trim();
+
       if (!token || token.length === 0) {
         throw new Error('Empty token returned from gcloud');
       }

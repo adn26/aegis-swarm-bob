@@ -1,4 +1,9 @@
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Loader2, AlertCircle, ArrowLeft, Shield, Bug, Zap, ShieldCheck, Terminal } from 'lucide-react';
+import { apiService } from '../services/api.service';
+import { sseService } from '../services/sse.service';
+import { Audit, Vulnerability, Patch, SSEEvent } from '../types/audit.types';
 import '../styles/command-center.css';
 
 function AuditDashboard() {
@@ -23,7 +28,6 @@ function AuditDashboard() {
         const auditData = await apiService.getAudit(id);
         setAudit(auditData);
 
-        // Fetch vulnerabilities and patches if audit is completed or in progress
         if (auditData.status !== 'pending') {
           const [vulns, patchesData] = await Promise.all([
             apiService.getVulnerabilities(id),
@@ -47,50 +51,51 @@ function AuditDashboard() {
   useEffect(() => {
     if (!id) return;
 
-    console.log('Connecting to SSE for audit:', id);
-    
     sseService.connect(id);
     setConnected(true);
 
-    // Listen for all events
     const handleEvent = (event: SSEEvent) => {
-      console.log('SSE Event:', event);
-      setEvents(prev => [...prev, event]);
+      setEvents(prev => [...prev, event].slice(-50)); // Keep last 50 events
 
-      // Update audit data based on events
       if (event.type === 'vulnerability_found' && event.data) {
-        setVulnerabilities(prev => [...prev, event.data as Vulnerability]);
+        // Map backend snake_case to frontend expected field names if necessary
+        // and ensure we handle nested data correctly
+        const vuln = {
+          ...event.data,
+          file_path: event.data.file_path || event.data.filePath,
+          line_number: event.data.line_number || event.data.lineNumber,
+          exploit_code: event.data.exploit_code || event.data.exploitCode,
+          cwe_id: event.data.cwe_id || event.data.cweId,
+          cvss_score: event.data.cvss_score || event.data.cvssScore
+        };
+
+        setVulnerabilities(prev => {
+          const exists = prev.some(v => v.id === (vuln as any).id);
+          if (exists) return prev;
+          return [...prev, vuln as Vulnerability];
+        });
       }
       
       if (event.type === 'patch_generated' && event.data) {
-        setPatches(prev => [...prev, event.data as Patch]);
+        setPatches(prev => {
+          const exists = prev.some(p => p.id === event.data.id);
+          if (exists) return prev;
+          return [...prev, event.data as Patch];
+        });
       }
 
       if (event.type === 'audit_completed') {
-        // Refresh audit data
-        if (id) {
-          apiService.getAudit(id).then(setAudit);
-        }
+        if (id) apiService.getAudit(id).then(setAudit);
+      }
+      
+      if (event.data && event.data.status) {
+         setAudit(prev => prev ? { ...prev, status: event.data.status } : null);
       }
     };
 
-    sseService.on('connected', handleEvent);
-    sseService.on('audit_started', handleEvent);
-    sseService.on('repo_cloned', handleEvent);
-    sseService.on('files_scanned', handleEvent);
-    sseService.on('redteam_analyzing', handleEvent);
-    sseService.on('vulnerability_found', handleEvent);
-    sseService.on('blueteam_patching', handleEvent);
-    sseService.on('patch_generated', handleEvent);
-    sseService.on('sandbox_deploying', handleEvent);
-    sseService.on('tests_running', handleEvent);
-    sseService.on('test_results', handleEvent);
-    sseService.on('audit_completed', handleEvent);
-    sseService.on('error', handleEvent);
-    sseService.on('progress', handleEvent);
+    sseService.on('all', handleEvent);
 
     return () => {
-      console.log('Disconnecting SSE');
       sseService.disconnect();
       setConnected(false);
     };
@@ -98,107 +103,92 @@ function AuditDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-slate-600">Loading audit data...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <Loader2 className="w-12 h-12 animate-spin text-gold-500" />
       </div>
     );
   }
 
   if (error || !audit) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-md w-full">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-red-900 text-center mb-2">
-              Failed to Load Audit
-            </h2>
-            <p className="text-red-700 text-center mb-4">
-              {error || 'Audit not found'}
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              className="btn btn-primary w-full"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Home
-            </button>
-          </div>
+      <div className="min-h-screen flex items-center justify-center p-6 bg-black">
+        <div className="max-w-md w-full bg-red-900/20 border border-red-500 rounded-lg p-6 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-500 mb-2">Failed to Load Audit</h2>
+          <p className="text-red-400 mb-4">{error || 'Audit not found'}</p>
+          <button onClick={() => navigate('/')} className="cc-btn cc-btn-gold inline-flex items-center">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
+          </button>
         </div>
       </div>
     );
   }
 
-  const severityCounts = {
-    critical: vulnerabilities.filter(v => v.severity === 'Critical').length,
-    high: vulnerabilities.filter(v => v.severity === 'High').length,
-    medium: vulnerabilities.filter(v => v.severity === 'Medium').length,
-    low: vulnerabilities.filter(v => v.severity === 'Low').length,
-  };
-
-  const sendPrompt = (msg: string) => {
-    console.log('Sending prompt:', msg);
-  };
+  const statusOrder = ['pending', 'cloning', 'scanning', 'analyzing', 'patching', 'testing', 'completed'];
+  const getStatusIndex = (status: string) => statusOrder.indexOf(status);
+  const currentIdx = getStatusIndex(audit.status);
 
   return (
-    <div className="flex justify-center p-6 w-full">
+    <div className="flex justify-center p-6 w-full max-w-6xl mx-auto">
       <div className="w-full">
         <div className="cc-root">
           <div className="cc-pr-header">
-            <div className="cc-status-dot"></div>
+            <div className={`cc-status-dot ${audit.status === 'completed' ? '' : 'active'}`} style={{ animation: audit.status === 'completed' ? 'none' : 'cc-pulse 1.5s infinite', background: audit.status === 'completed' ? '#27ae60' : '#c9a84c' }}></div>
             <div>
-              <div className="cc-pr-title">Pull Request</div>
-              <div className="cc-pr-name">feat: add concurrent withdrawal endpoint — /api/v2/transfer</div>
+              <div className="cc-pr-title">Sequential Security Audit #{audit.id.slice(0, 8)}</div>
+              <div className="cc-pr-name">{audit.repo_url}</div>
             </div>
             <div className="cc-pr-meta" style={{ marginLeft: 'auto', textAlign: 'right' }}>
-              <div>adnan-dev → main</div>
-              <div>iWealthX · 3 files changed</div>
+              <div className="text-gold-500 font-mono text-xs mb-1 uppercase tracking-widest">{audit.status}</div>
+              <div className="text-[10px] text-gray-500">Aegis Swarm · {vulnerabilities.length} vulnerabilities found</div>
             </div>
           </div>
 
-          <div className="cc-timeline" style={{ marginBottom: '14px' }}>
-            <div className="cc-tl-step">
-              <div className="cc-tl-dot done">✓</div>
-              <div className="cc-tl-label">PR ingested</div>
+          <div className="cc-timeline" style={{ marginBottom: '24px' }}>
+            <div className={`cc-tl-step`}>
+              <div className={`cc-tl-dot ${currentIdx >= 2 ? 'done' : 'active'}`}>{currentIdx >= 2 ? '✓' : '→'}</div>
+              <div className={`cc-tl-label ${currentIdx < 2 ? 'active' : ''}`}>Ingestion</div>
             </div>
-            <div className="cc-tl-step">
-              <div className="cc-tl-dot done">✓</div>
-              <div className="cc-tl-label">Red team</div>
+            <div className={`cc-tl-step`}>
+              <div className={`cc-tl-dot ${currentIdx >= 4 ? 'done' : currentIdx >= 3 ? 'active' : 'idle'}`}>{currentIdx >= 4 ? '✓' : currentIdx >= 3 ? '→' : '□'}</div>
+              <div className={`cc-tl-label ${currentIdx === 3 ? 'active' : ''}`}>Red Team</div>
             </div>
-            <div className="cc-tl-step">
-              <div className="cc-tl-dot active">→</div>
-              <div className="cc-tl-label active">Blue team</div>
+            <div className={`cc-tl-step`}>
+              <div className={`cc-tl-dot ${currentIdx >= 5 ? 'done' : currentIdx === 4 ? 'active' : 'idle'}`}>{currentIdx >= 5 ? '✓' : currentIdx === 4 ? '→' : '□'}</div>
+              <div className={`cc-tl-label ${currentIdx === 4 ? 'active' : ''}`}>Blue Team</div>
             </div>
-            <div className="cc-tl-step">
-              <div className="cc-tl-dot idle">□</div>
-              <div className="cc-tl-label">Sandbox</div>
+            <div className={`cc-tl-step`}>
+              <div className={`cc-tl-dot ${currentIdx >= 6 ? 'done' : currentIdx === 5 ? 'active' : 'idle'}`}>{currentIdx >= 6 ? '✓' : currentIdx === 5 ? '→' : '□'}</div>
+              <div className={`cc-tl-label ${currentIdx === 5 ? 'active' : ''}`}>Sandbox</div>
             </div>
-            <div className="cc-tl-step">
-              <div className="cc-tl-dot idle">□</div>
-              <div className="cc-tl-label">Verdict</div>
+            <div className={`cc-tl-step`}>
+              <div className={`cc-tl-dot ${currentIdx >= 6 ? 'done' : 'idle'}`}>{currentIdx >= 6 ? '✓' : '□'}</div>
+              <div className={`cc-tl-label ${currentIdx >= 6 ? 'active' : ''}`}>Verdict</div>
             </div>
           </div>
 
-          <div className="cc-metrics">
-            <div className="cc-metric">
-              <div className="cc-metric-label">Vulns found</div>
-              <div className="cc-metric-val red">2</div>
-            </div>
-            <div className="cc-metric">
-              <div className="cc-metric-label">Patches gen.</div>
-              <div className="cc-metric-val amber">1</div>
-            </div>
-            <div className="cc-metric">
-              <div className="cc-metric-label">Sandbox runs</div>
-              <div className="cc-metric-val">0</div>
-            </div>
-            <div className="cc-metric">
-              <div className="cc-metric-label">Time elapsed</div>
-              <div className="cc-metric-val">1m 42s</div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+             <div className="cc-metric-card">
+                <div className="flex items-center gap-2 text-red-500 mb-2">
+                  <Bug className="w-4 h-4" />
+                  <span className="text-[10px] uppercase tracking-tighter">Threats Detected</span>
+                </div>
+                <div className="text-3xl font-bold text-white">{vulnerabilities.length}</div>
+             </div>
+             <div className="cc-metric-card">
+                <div className="flex items-center gap-2 text-gold-500 mb-2">
+                  <Shield className="w-4 h-4" />
+                  <span className="text-[10px] uppercase tracking-tighter">Remediations</span>
+                </div>
+                <div className="text-3xl font-bold text-white">{patches.length}</div>
+             </div>
+             <div className="cc-metric-card">
+                <div className="flex items-center gap-2 text-green-500 mb-2">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="text-[10px] uppercase tracking-tighter">Verified Fixes</span>
+                </div>
+                <div className="text-3xl font-bold text-white">{patches.filter(p => p.test_passed).length}</div>
+             </div>
           </div>
 
           <div className="cc-arena">
@@ -206,34 +196,35 @@ function AuditDashboard() {
               <div className="cc-team-header">
                 <div className="cc-team-icon red">⚔</div>
                 <span className="cc-team-name red">Red Team</span>
-                <span className="cc-team-status">COMPLETE</span>
+                <span className="cc-team-status uppercase">
+                  {currentIdx > 3 ? 'COMPLETE' : audit.status === 'analyzing' ? 'ANALYZING...' : 'QUEUED'}
+                </span>
               </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">00:00:12</div>
-                <div className="cc-log-msg">Scanning diff for async state mutations...</div>
-              </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">00:00:31</div>
-                <div className="cc-log-msg danger">CRITICAL: Race condition detected in balance debit path. No atomic lock on getBalance → debit sequence.</div>
-              </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">00:00:48</div>
-                <div className="cc-log-msg">Generating exploit — firing 50 concurrent requests before balance commit...</div>
-              </div>
-              <div className="cc-code-block">
-                <span className="cmt">// exploit.js — double-spend via race</span><br />
-                <span className="kw">const</span> reqs = Array(50).fill(<span className="kw">null</span>).map({'() =>'}<br />
-                &nbsp;&nbsp;fetch(<span className="str">'/api/v2/transfer'</span>, &#123;<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;method: <span className="str">'POST'</span>,<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;body: JSON.stringify(&#123; amount: 9999, to: <span className="str">'atk'</span> &#125;)<br />
-                &nbsp;&nbsp;&#125;)<br />
-                );<br />
-                <span className="kw">await</span> Promise.all(reqs);<br />
-                <span className="cmt">// Expected: balance {"<"} 0 → funds drained</span>
-              </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">01:02:00</div>
-                <div className="cc-log-msg danger">SECONDARY: Missing idempotency key validation. Same tx can replay across sessions.</div>
+              <div className="max-h-[300px] overflow-y-auto pr-2 font-mono text-[11px]">
+                {events
+                  .filter((e) => e.type.includes('redteam') || e.type === 'vulnerability_found')
+                  .map((event, i) => (
+                    <div key={i} className="cc-log-entry">
+                      <div className="cc-log-time">{new Date(event.timestamp).toLocaleTimeString()}</div>
+                      <div
+                        className={`cc-log-msg ${
+                          event.type === 'vulnerability_found' ? 'danger' : ''
+                        }`}
+                      >
+                        {event.type === 'vulnerability_found'
+                          ? `ALERT: ${event.data?.type} detected in ${event.data?.file_path || event.data?.filePath} at line ${event.data?.line_number || event.data?.lineNumber}`
+                          : event.data?.message || event.type}
+                      </div>
+                      {event.type === 'vulnerability_found' && event.data?.exploit_code && (
+                        <div className="cc-code-block mt-2 mb-4 border-l-red-500 border-l-2">
+                          <div className="cc-log-time mb-1 text-[9px] uppercase">Exploit Proof-of-Concept:</div>
+                          <pre className="whitespace-pre-wrap text-red-400/80">
+                            {event.data.exploit_code}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
             <div className="cc-divider"></div>
@@ -241,133 +232,46 @@ function AuditDashboard() {
               <div className="cc-team-header">
                 <div className="cc-team-icon blue">🛡</div>
                 <span className="cc-team-name blue">Blue Team</span>
-                <span className="cc-team-status" style={{ animation: 'cc-pulse 1.5s infinite', color: '#c9a84c' }}>PATCHING...</span>
+                <span
+                  className="cc-team-status uppercase"
+                  style={audit.status === 'patching' ? { animation: 'cc-pulse 1.5s infinite', color: '#c9a84c' } : {}}
+                >
+                  {currentIdx > 4 ? 'COMPLETE' : audit.status === 'patching' ? 'PATCHING...' : 'QUEUED'}
+                </span>
               </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">01:02:08</div>
-                <div className="cc-log-msg">Received Red Team exploit. Analyzing attack vector...</div>
-              </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">01:02:24</div>
-                <div className="cc-log-msg highlight">Strategy: wrap debit in DB-level row lock + Redis mutex per account ID.</div>
-              </div>
-              <div className="cc-code-block">
-                <span className="cmt">// patch: atomic lock on transfer</span><br />
-                <span className="kw">const</span> lock = <span className="kw">await</span> redis.set(<br />
-                &nbsp;&nbsp;<span className="str">`lock:$&#123;accountId&#125;`</span>, <span className="str">'1'</span>,<br />
-                &nbsp;&nbsp;<span className="str">'NX'</span>, <span className="str">'PX'</span>, 3000<br />
-                );<br />
-                <span className="kw">if</span> (!lock) <span className="kw">throw</span> <span className="kw">new</span> Error(<span className="str">'Concurrent tx'</span>);<br />
-                <span className="kw">await</span> db.transaction(<span className="kw">async</span> (trx) {'=>'} &#123;<br />
-                &nbsp;&nbsp;<span className="kw">await</span> trx.raw(<span className="str">'SELECT ... FOR UPDATE'</span>);<br />
-                &nbsp;&nbsp;<span className="cmt">// debit only after lock acquired</span><br />
-                &#125;);
-              </div>
-              <div className="cc-log-entry">
-                <div className="cc-log-time">01:02:41</div>
-                <div className="cc-log-msg">Patch generated. Awaiting sandbox verification...</div>
+              <div className="max-h-[300px] overflow-y-auto pr-2 font-mono text-[11px]">
+                {events
+                  .filter((e) => e.type.includes('blueteam') || e.type === 'patch_generated')
+                  .map((event, i) => (
+                    <div key={i} className="cc-log-entry">
+                      <div className="cc-log-time">{new Date(event.timestamp).toLocaleTimeString()}</div>
+                      <div className={`cc-log-msg ${event.type === 'patch_generated' ? 'highlight' : ''}`}>
+                        {event.type === 'patch_generated'
+                          ? `Strategy: Generated patch for ${event.data?.file_path}`
+                          : event.data?.message || event.type}
+                      </div>
+                      {event.type === 'patch_generated' && event.data?.explanation && (
+                        <div className="cc-code-block mt-2 mb-4 border-l-blue-500 border-l-2">
+                           <div className="cc-log-time mb-1 text-[9px] uppercase">Remediation Explanation:</div>
+                           <div className="text-blue-300/80 italic">{event.data.explanation}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
-        </div>
 
-          <div className="cc-judge-panel">
-            <div className="cc-judge-header">
-              <span style={{ fontSize: '13px', color: '#6a5820' }}>⚖</span>
-              <span className="cc-judge-title">Sandbox Judge</span>
-              <div className="cc-verdict">
-                <span className="cc-verdict-label">VERDICT</span>
-                <span className="cc-verdict-val pending">PENDING</span>
-              </div>
-            </div>
-            <div className="cc-sandbox-grid">
-              <div className="cc-sandbox-step">
-                <div className="cc-sandbox-step-label">Docker env</div>
-                <div className="cc-sandbox-step-val ok">✓ Spawned</div>
-              </div>
-              <div className="cc-sandbox-step">
-                <div className="cc-sandbox-step-label">Patch applied</div>
-                <div className="cc-sandbox-step-val ok">✓ Compiled</div>
-              </div>
-              <div className="cc-sandbox-step">
-                <div className="cc-sandbox-step-label">Exploit run</div>
-                <div className="cc-sandbox-step-val run">● Running</div>
-              </div>
-              <div className="cc-sandbox-step">
-                <div className="cc-sandbox-step-label">Balance integrity</div>
-                <div className="cc-sandbox-step-val run">● Checking</div>
-              </div>
-              <div className="cc-sandbox-step">
-                <div className="cc-sandbox-step-label">Replay attack</div>
-                <div className="cc-sandbox-step-val idle" style={{ color: '#3a2c10' }}>— Queued</div>
-              </div>
-              <div className="cc-sandbox-step">
-                <div className="cc-sandbox-step-label">Final score</div>
-                <div className="cc-sandbox-step-val idle" style={{ color: '#3a2c10' }}>— Queued</div>
-              </div>
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.total_vulnerabilities || 0}
-            </p>
-            <div className="mt-3 flex gap-2 text-xs">
-              <span className="px-2 py-1 bg-red-100 text-red-700 rounded">
-                {severityCounts.critical} Critical
-              </span>
-              <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                {severityCounts.high} High
-              </span>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-600">
-                Files Scanned
-              </h3>
-              <FileCode className="w-5 h-5 text-blue-500" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.scanned_files || 0}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">
-              of {audit.total_files || 0} total
-            </p>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-600">
-                Patches Generated
-              </h3>
-              <Wrench className="w-5 h-5 text-green-500" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.patches_applied || 0}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">
-              {audit.tests_passed ? 'Tests passed' : 'Testing...'}
-            </p>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-600">
-                Duration
-              </h3>
-              <Clock className="w-5 h-5 text-indigo-500" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.completed_at && audit.started_at
-                ? Math.round((new Date(audit.completed_at).getTime() - new Date(audit.started_at).getTime()) / 1000)
-                : '-'}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">seconds</p>
-          </div>
-
-          <div className="cc-action-row">
-            <Link to={`/report/red-team/${id || 'pr247'}`} className="cc-btn cc-btn-gold">View full report ↗</Link>
-            <button className="cc-btn cc-btn-ghost" onClick={() => sendPrompt('Explain the race condition vulnerability found in the transfer endpoint')}>Explain vuln ↗</button>
-            <button className="cc-btn cc-btn-ghost" onClick={() => sendPrompt('What would happen if the sandbox verdict fails?')}>What if it fails? ↗</button>
+          <div className="cc-action-row mt-8 flex flex-wrap gap-4">
+            <Link to={`/report/red-team/${id}`} className={`cc-btn ${currentIdx >= 3 ? 'cc-btn-gold' : 'cc-btn-ghost opacity-50 cursor-not-allowed'}`}>
+              View Red Report
+            </Link>
+            <Link to={`/report/blue-team/${id}`} className={`cc-btn ${currentIdx >= 4 ? 'cc-btn-gold' : 'cc-btn-ghost opacity-50 cursor-not-allowed'}`}>
+              View Blue Report
+            </Link>
+            <button className="cc-btn cc-btn-ghost ml-auto" onClick={() => navigate('/')}>
+              Terminal Home
+            </button>
           </div>
         </div>
       </div>
@@ -376,4 +280,3 @@ function AuditDashboard() {
 }
 
 export default AuditDashboard;
-
