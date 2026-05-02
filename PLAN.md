@@ -442,6 +442,97 @@ Real-time events streamed to frontend:
 
 ---
 
-**Last Updated**: 2026-05-02
+## 📝 Progress Tracker
+
+### ✅ Completed Components
+
+#### Phase 1: Foundation (100%)
+- [x] Project setup with dependencies
+- [x] Environment configuration (.env with Vertex AI)
+- [x] Logging system (Winston)
+- [x] Error handling classes
+- [x] Express server with SSE support
+- [x] API routes structure
+
+#### Phase 2: Database & Storage (100%)
+- [x] Supabase PostgreSQL schema
+- [x] Supabase client initialization
+- [x] Storage service with async operations
+- [x] Database connection testing
+
+#### Phase 3: GitHub Integration (100%)
+- [x] Repository cloning service (simple-git)
+- [x] PR fetching and diff analysis
+- [x] File system scanner with filters
+- [x] Workspace management
+- [x] GitHub API integration (@octokit/rest)
+
+#### Phase 4: AI Provider System (100%)
+- [x] Abstract LLM provider interface
+- [x] Vertex AI Claude Opus (Red Team)
+- [x] Vertex AI Claude Haiku (Blue Team & Judge)
+- [x] Vertex AI Claude Sonnet (Alternative)
+- [x] OpenAI provider (Alternative)
+- [x] Ollama provider (Local)
+- [x] Role-based model selection
+- [x] LangGraph integration helpers
+
+#### Phase 5: LangGraph Workflow (In Progress - 30%)
+- [x] State schema definition
+- [x] State management helpers
+- [ ] Workflow graph definition
+- [ ] Node implementations
+- [ ] Edge conditions
+
+### 🔄 In Progress
+
+#### Red Team Agent (0%)
+- [ ] Vulnerability detection prompts
+- [ ] Traditional vulnerability scanning
+- [ ] AI-specific vulnerability detection
+- [ ] Exploit code generation
+- [ ] OWASP categorization
+
+#### Blue Team Agent (0%)
+- [ ] Patch generation prompts
+- [ ] Secure code patching
+- [ ] Code diff creation
+- [ ] Explanation generation
+
+### 📋 Pending Components
+
+#### Docker Sandbox (0%)
+- [ ] Dockerfile for Node.js sandbox
+- [ ] Security hardening
+- [ ] Resource limits
+- [ ] Container lifecycle management
+- [ ] Test execution
+- [ ] Log capture
+
+#### PDF Report Generation (0%)
+- [ ] PDFKit integration
+- [ ] Report template
+- [ ] Vulnerability details
+- [ ] Patch information
+- [ ] Recommendations
+
+#### Frontend (0%)
+- [ ] React application setup
+- [ ] Command Center UI
+- [ ] Real-time SSE integration
+- [ ] Vulnerability visualization
+- [ ] Patch diff viewer
+- [ ] Sandbox terminal
+
+#### Integration & Testing (0%)
+- [ ] End-to-end workflow testing
+- [ ] Error handling
+- [ ] Performance optimization
+- [ ] Security hardening
+
+---
+
+**Last Updated**: 2026-05-02 12:23 PM IST
 **Version**: 1.0.0
-**Status**: Active Development
+**Status**: Active Development - Phase 5 (LangGraph Workflow)
+**Progress**: ~40% Complete

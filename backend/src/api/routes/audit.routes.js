@@ -36,6 +36,12 @@ router.get('/:id/vulnerabilities', asyncHandler(auditController.getVulnerabiliti
 router.get('/:id/patches', asyncHandler(auditController.getPatches));
 
 /**
+ * GET /api/audit/:id/results
+ * Get full audit results with statistics
+ */
+router.get('/:id/results', asyncHandler(auditController.getAuditResults));
+
+/**
  * GET /api/audit/:id/report
  * Download PDF report for an audit
  */
