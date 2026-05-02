@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border-primary;
+  }
+  
+  body {
+    @apply bg-bg-primary text-text-primary antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-bg-secondary;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gold/30 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gold/50;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-gold/30 text-text-primary;
+  }
+}
+
+@layer components {
+  /* Button variants */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply bg-gold text-bg-primary hover:bg-gold-dark hover:shadow-gold;
+  }
+
+  .btn-secondary {
+    @apply bg-bg-tertiary text-text-primary hover:bg-bg-tertiary/80 border border-border-primary;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-text-secondary hover:bg-bg-tertiary hover:text-text-primary;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-bg-secondary rounded-lg border border-border-primary p-6;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-gold/50 hover:shadow-gold;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-critical {
+    @apply bg-critical/20 text-critical border border-critical/30;
+  }
+
+  .badge-high {
+    @apply bg-high/20 text-high border border-high/30;
+  }
+
+  .badge-medium {
+    @apply bg-medium/20 text-medium border border-medium/30;
+  }
+
+  .badge-low {
+    @apply bg-low/20 text-low border border-low/30;
+  }
+
+  .badge-success {
+    @apply bg-green-500/20 text-green-400 border border-green-500/30;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full px-4 py-2 bg-bg-tertiary border border-border-primary rounded-lg text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-all;
+  }
+
+  /* Code block */
+  .code-block {
+    @apply bg-bg-tertiary rounded-lg p-4 font-mono text-sm overflow-x-auto;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply animate-pulse bg-bg-tertiary rounded;
+  }
+
+  /* Shimmer effect */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(251, 191, 36, 0.1),
+      transparent
+    );
+  }
+}
+
+@layer utilities {
+  /* Text utilities */
+  .text-gradient {
+    @apply bg-gradient-to-r from-gold to-gold-dark bg-clip-text text-transparent;
+  }
+
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  /* Glow effect */
+  .glow-gold {
+    @apply shadow-gold;
+  }
+
+  /* Truncate with tooltip */
+  .truncate-tooltip {
+    @apply truncate cursor-help;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Made with Bob */
