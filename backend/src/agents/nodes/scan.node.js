@@ -5,6 +5,35 @@ import logger from '../../utils/logger.js';
 import { addMessage, updateStats } from '../graph/state.js';
 
 /**
+ * Patterns for files to skip during security analysis
+ * These are typically vendor libraries, minified files, or assets
+ */
+const SKIP_PATTERNS = [
+  /node_modules/,
+  /vendor/,
+  /\.min\.js$/,
+  /\.min\.css$/,
+  /bootstrap/,
+  /jquery/,
+  /raphael/,
+  /html5shiv/,
+  /morris/,
+  /assets\/vendor/,
+  /assets\/js\/tour/,
+  /assets\/js\/chart/,
+  /\.bundle\./,
+  /dist\//,
+  /build\//,
+];
+
+/**
+ * Check if a file should be skipped from analysis
+ */
+const shouldSkipFile = (filePath) => {
+  return SKIP_PATTERNS.some(pattern => pattern.test(filePath));
+};
+
+/**
  * Scan Files Node
  * Scans the repository for files to analyze
  */
@@ -19,19 +48,36 @@ export const scanFilesNode = async (state) => {
     });
 
     // Scan the directory for files
-    const files = await fileScanner.scanDirectory(state.workspacePath);
+    const allFiles = await fileScanner.scanDirectory(state.workspacePath);
+    
+    // Filter out vendor/minified files
+    const files = allFiles.filter(file => !shouldSkipFile(file.path));
+    
+    const skippedCount = allFiles.length - files.length;
+    logger.info(`Found ${allFiles.length} files, analyzing ${files.length} (skipped ${skippedCount} vendor/minified files)`);
 
-    logger.info(`Found ${files.length} files to analyze`);
-
-    // Create scanned file records in database
-    for (const file of files) {
-      await storageService.createScannedFile({
-        auditId: state.auditId,
-        filePath: file.path,
-        fileSize: file.size,
-        linesOfCode: file.lines,
-        language: file.language,
-      });
+    // Create scanned file records in database (batch insert for performance)
+    try {
+      // Use Promise.all for parallel inserts (faster than sequential)
+      await Promise.all(
+        files.map(file =>
+          storageService.createScannedFile({
+            auditId: state.auditId,
+            filePath: file.path,
+            fileSize: file.size,
+            linesOfCode: file.lines,
+            language: file.language,
+          }).catch(err => {
+            logger.warn(`Failed to create scanned file record for ${file.path}:`, err.message);
+            // Continue even if one file fails
+            return null;
+          })
+        )
+      );
+      logger.info(`Created ${files.length} scanned file records`);
+    } catch (error) {
+      logger.error('Error creating scanned file records:', error);
+      // Continue workflow even if database inserts fail
     }
 
     // Update audit statistics

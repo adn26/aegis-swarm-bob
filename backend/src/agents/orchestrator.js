@@ -36,11 +36,16 @@ class AuditOrchestrator {
       logger.info(`Created audit record: ${audit.id}`);
 
       // Start workflow in background (non-blocking)
-      this.runWorkflow(audit.id, {
-        auditId: audit.id,
-        repoUrl: auditData.repoUrl,
-        prNumber: auditData.prNumber,
-        branch: auditData.branch,
+      // Use setImmediate to ensure it runs asynchronously
+      setImmediate(() => {
+        this.runWorkflow(audit.id, {
+          auditId: audit.id,
+          repoUrl: auditData.repoUrl,
+          prNumber: auditData.prNumber,
+          branch: auditData.branch,
+        }).catch(error => {
+          logger.error(`Workflow execution failed for audit ${audit.id}:`, error);
+        });
       });
 
       return audit;

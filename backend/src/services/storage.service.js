@@ -75,6 +75,7 @@ class StorageService {
       const updates = {};
 
       if (data.status !== undefined) updates.status = data.status;
+      if (data.workspacePath !== undefined) updates.workspace_path = data.workspacePath;
       if (data.totalFiles !== undefined) updates.total_files = data.totalFiles;
       if (data.scannedFiles !== undefined) updates.scanned_files = data.scannedFiles;
       if (data.totalVulnerabilities !== undefined) updates.total_vulnerabilities = data.totalVulnerabilities;

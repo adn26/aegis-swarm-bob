@@ -1,0 +1,17 @@
+{
+  "watch": ["src/**/*.js", "server.js"],
+  "ignore": [
+    "workspace",
+    "workspace/**",
+    "logs",
+    "logs/**",
+    "*.log",
+    "test-*.js",
+    "node_modules/**"
+  ],
+  "ext": "js,json",
+  "delay": 1000,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

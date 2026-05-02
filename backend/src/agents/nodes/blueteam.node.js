@@ -1,10 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { getLangChainModel } from '../../services/ai-provider.service.js';
 import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
-import { addPatch, addMessage, moveToNextFile } from '../graph/state.js';
+import { addPatch, addMessage } from '../graph/state.js';
 
 /**
  * Blue Team Patch Node
@@ -26,7 +27,7 @@ export const blueTeamPatchNode = async (state) => {
 
     if (fileVulnerabilities.length === 0) {
       logger.info(`No vulnerabilities to patch in ${file.path}`);
-      return moveToNextFile(state);
+      return state;
     }
 
     logger.info(`Blue Team patching ${fileVulnerabilities.length} vulnerabilities in ${file.path}`);
@@ -48,9 +49,10 @@ export const blueTeamPatchNode = async (state) => {
     // Generate patches for all vulnerabilities in this file
     const prompt = createBlueTeamPrompt(file.path, fileContent, fileVulnerabilities, file.language);
 
-    // Generate patches with AI
+    // Generate patches with AI using proper LangChain message instances
     const response = await model.invoke([
-      { role: 'user', content: prompt }
+      new SystemMessage('You are a Blue Team security expert. Respond only with valid JSON arrays as instructed.'),
+      new HumanMessage(prompt)
     ]);
 
     // Parse patches from response
@@ -62,12 +64,20 @@ export const blueTeamPatchNode = async (state) => {
     let updatedState = state;
 
     for (const patch of patches) {
-      // Find corresponding vulnerability
-      const vulnerability = fileVulnerabilities.find(
-        v => v.lineNumber === patch.lineNumber
-      );
+      // Try exact line match first, then fuzzy match, then just use first vuln
+      const vulnerability =
+        fileVulnerabilities.find(v => v.lineNumber === patch.lineNumber) ||
+        fileVulnerabilities.find(v =>
+          Math.abs((v.lineNumber || 0) - (patch.lineNumber || 0)) <= 5
+        ) ||
+        fileVulnerabilities[0]; // fallback — always link to something
 
-      if (vulnerability) {
+      if (!vulnerability?.id) {
+        logger.warn(`No vulnerability match for patch at line ${patch.lineNumber}, skipping`);
+        continue; // skip instead of crashing
+      }
+
+      try {
         // Save to database
         const dbPatch = await storageService.createPatch({
           vulnerabilityId: vulnerability.id,
@@ -94,6 +104,9 @@ export const blueTeamPatchNode = async (state) => {
           severity: vulnerability.severity,
           explanation: patch.explanation,
         });
+      } catch (patchErr) {
+        // Log but don't crash the whole node — keep processing remaining patches
+        logger.warn(`Skipped patch for ${patch.filePath}:${patch.lineNumber} — ${patchErr.message}`);
       }
     }
 
@@ -119,10 +132,8 @@ export const blueTeamPatchNode = async (state) => {
       file: state.currentFile?.path,
     });
 
-    // Move to next file on error
-    const updatedState = moveToNextFile(state);
-
-    return addMessage(updatedState, {
+    // Return state on error (workflow will handle moving to next file)
+    return addMessage(state, {
       role: 'system',
       content: `Patching failed for ${state.currentFile?.path}: ${error.message}`,
       step: 'blueteam_patch_error',
@@ -192,18 +203,36 @@ Generate complete, working patches that fix the vulnerabilities while maintainin
  */
 const parsePatches = (response, filePath) => {
   try {
-    // Extract JSON from response
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-    if (!jsonMatch) {
-      // Try to parse the entire response as JSON
-      const parsed = JSON.parse(response);
-      return Array.isArray(parsed) ? parsed.map(p => ({ ...p, filePath })) : [];
+    if (!response || typeof response !== 'string') return [];
+
+    // Extract JSON array — try fenced block first, then bare array
+    let jsonStr = null;
+
+    const fenced = response.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+    if (fenced) {
+      jsonStr = fenced[1];
+    } else {
+      const bare = response.match(/(\[[\s\S]*\])/);
+      if (bare) jsonStr = bare[1];
     }
 
-    const patches = JSON.parse(jsonMatch[1]);
+    if (!jsonStr) {
+      logger.warn('No JSON array found in Blue Team response, treating as no patches');
+      return [];
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      logger.warn('JSON parse failed in Blue Team response, treating as no patches');
+      return [];
+    }
+
+    if (!Array.isArray(parsed)) return [];
     
     // Add filePath to each patch
-    return patches.map(patch => ({
+    return parsed.map(patch => ({
       ...patch,
       filePath,
     }));

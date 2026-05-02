@@ -70,12 +70,20 @@ export const cloneRepositoryNode = async (state) => {
       errorMessage: `Clone failed: ${error.message}`,
     });
 
-    return {
-      ...state,
-      status: 'failed',
-      error: error.message,
-      currentStep: 'clone_failed',
-    };
+    // Return failed state - this will stop the workflow
+    return addMessage(
+      {
+        ...state,
+        status: 'failed',
+        error: error.message,
+        currentStep: 'clone_failed',
+      },
+      {
+        role: 'system',
+        content: `Clone failed: ${error.message}`,
+        step: 'clone_repository',
+      }
+    );
   }
 };
 

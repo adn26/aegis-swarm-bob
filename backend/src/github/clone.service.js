@@ -51,9 +51,47 @@ class CloneService {
   }
 
   /**
+   * Detect default branch of a repository
+   * @param {string} repoUrl - GitHub repository URL
+   * @returns {Promise<string>} - Default branch name
+   */
+  async detectDefaultBranch(repoUrl) {
+    try {
+      // Add GitHub token for authentication if available
+      let authRepoUrl = repoUrl;
+      if (config.github.token && repoUrl.startsWith('https://')) {
+        authRepoUrl = repoUrl.replace(
+          'https://github.com/',
+          `https://${config.github.token}@github.com/`
+        );
+      }
+
+      // Try to get remote info
+      const git = simpleGit();
+      const remoteInfo = await git.listRemote(['--symref', authRepoUrl, 'HEAD']);
+      
+      // Parse the output to find the default branch
+      // Output format: "ref: refs/heads/main	HEAD"
+      const match = remoteInfo.match(/ref: refs\/heads\/(\S+)\s+HEAD/);
+      if (match) {
+        logger.info(`Detected default branch: ${match[1]}`);
+        return match[1];
+      }
+      
+      // Fallback to 'main'
+      logger.warn('Could not detect default branch, defaulting to "main"');
+      return 'main';
+    } catch (error) {
+      logger.warn('Error detecting default branch, trying common branches:', error.message);
+      // Try common branch names
+      return 'main';
+    }
+  }
+
+  /**
    * Clone a GitHub repository
    * @param {string} repoUrl - GitHub repository URL
-   * @param {string} branch - Branch to clone (optional)
+   * @param {string} branch - Branch to clone (optional, will auto-detect if not provided)
    * @returns {Promise<object>} - { workspacePath, repoInfo }
    */
   async cloneRepository(repoUrl, branch = null) {
@@ -70,19 +108,15 @@ class CloneService {
     try {
       logger.info(`Cloning repository: ${repoInfo.fullName}`);
       
+      // Auto-detect branch if not provided
+      if (!branch) {
+        branch = await this.detectDefaultBranch(repoUrl);
+        logger.info(`Using detected branch: ${branch}`);
+      }
+      
       // Initialize git
       const git = simpleGit();
       
-      // Clone options
-      const cloneOptions = {
-        '--depth': 1, // Shallow clone for speed
-        '--single-branch': null,
-      };
-
-      if (branch) {
-        cloneOptions['--branch'] = branch;
-      }
-
       // Add GitHub token for authentication if available
       let authRepoUrl = repoUrl;
       if (config.github.token && repoUrl.startsWith('https://')) {
@@ -92,8 +126,39 @@ class CloneService {
         );
       }
 
-      // Clone repository
-      await git.clone(authRepoUrl, repoWorkspace, cloneOptions);
+      // Try to clone with specified/detected branch
+      let cloneSuccess = false;
+      const branchesToTry = [branch, 'main', 'master'];
+      let lastError = null;
+
+      for (const tryBranch of branchesToTry) {
+        try {
+          logger.info(`Attempting to clone branch: ${tryBranch}`);
+          
+          const cloneOptions = {
+            '--depth': 1,
+            '--single-branch': null,
+            '--branch': tryBranch,
+          };
+
+          await git.clone(authRepoUrl, repoWorkspace, cloneOptions);
+          cloneSuccess = true;
+          branch = tryBranch; // Update to the successful branch
+          logger.info(`Successfully cloned branch: ${tryBranch}`);
+          break;
+        } catch (error) {
+          lastError = error;
+          logger.warn(`Failed to clone branch ${tryBranch}: ${error.message}`);
+          // Clean up failed attempt
+          if (fs.existsSync(repoWorkspace)) {
+            fs.rmSync(repoWorkspace, { recursive: true, force: true });
+          }
+        }
+      }
+
+      if (!cloneSuccess) {
+        throw lastError || new Error('Failed to clone repository with any common branch');
+      }
       
       // Get repository info
       const repoGit = simpleGit(repoWorkspace);

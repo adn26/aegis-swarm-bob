@@ -4,8 +4,8 @@
  * Verifies that the provider initializes correctly and can fetch tokens
  */
 
-import { getLangChainModel } from './src/services/ai-provider.service.js';
-import logger from './src/utils/logger.js';
+import { getLangChainModel } from '../src/services/ai-provider.service.js';
+import logger from '../src/utils/logger.js';
 
 async function testGLM5Provider() {
   try {

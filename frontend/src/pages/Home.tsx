@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, ShieldAlert, ShieldCheck, Box, Github, Loader2 } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, Box, Github, Loader2, AlertCircle } from 'lucide-react';
+import { apiService } from '../services/api.service';
 
 function Home() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     repoUrl: '',
     branch: '',
@@ -14,15 +16,29 @@ function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     
     try {
-      // TODO: Implement API call
-      console.log('Starting audit:', formData);
-      // simulate delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      // navigate(`/audit/${auditId}`);
-    } catch (error) {
-      console.error('Failed to start audit:', error);
+      console.log('Starting scan:', formData);
+      
+      // Call the API to start the audit
+      const response = await apiService.startAudit({
+        repoUrl: formData.repoUrl,
+        branch: formData.branch || undefined,
+        prNumber: formData.prNumber ? parseInt(formData.prNumber) : undefined,
+      });
+
+      console.log('Audit started:', response);
+
+      // Navigate to the audit dashboard
+      if (response.data?.auditId) {
+        navigate(`/audit/${response.data.auditId}`);
+      } else {
+        throw new Error('No audit ID returned from server');
+      }
+    } catch (err) {
+      console.error('Failed to start scan:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start scan. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -99,6 +115,16 @@ function Home() {
               </div>
             </div>
 
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-900 mb-1">Failed to start audit</p>
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              </div>
+            )}
+
             <div className="pt-4">
               <button
                 type="submit"
@@ -111,7 +137,7 @@ function Home() {
                     Initializing Agents...
                   </span>
                 ) : (
-                  'Start Audit'
+                  'Start Security Audit'
                 )}
               </button>
             </div>

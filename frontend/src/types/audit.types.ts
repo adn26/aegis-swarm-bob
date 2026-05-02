@@ -98,4 +98,10 @@ export interface Report {
   generated_at: string;
 }
 
+export interface SSEEvent {
+  type: string;
+  timestamp: string;
+  data?: any;
+}
+
 // Made with Bob

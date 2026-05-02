@@ -1,7 +1,7 @@
 import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
-import { addMessage, moveToNextFile } from '../graph/state.js';
+import { addMessage } from '../graph/state.js';
 
 /**
  * Sandbox Test Node
@@ -26,7 +26,7 @@ export const sandboxTestNode = async (state) => {
 
     if (filePatches.length === 0) {
       logger.info(`No patches to test in ${file.path}`);
-      return moveToNextFile(state);
+      return state;
     }
 
     logger.info(`Testing ${filePatches.length} patches in sandbox for ${file.path}`);
@@ -78,7 +78,7 @@ export const sandboxTestNode = async (state) => {
       failed: testResults.filter(r => !r.passed).length,
     });
 
-    // Update state with test results
+    // Update state with test results (workflow will handle moving to next file)
     const updatedState = {
       ...state,
       testResults: [...state.testResults, ...testResults],
@@ -88,10 +88,7 @@ export const sandboxTestNode = async (state) => {
       },
     };
 
-    // Move to next file
-    const nextState = moveToNextFile(updatedState);
-
-    return addMessage(nextState, {
+    return addMessage(updatedState, {
       role: 'system',
       content: `Tested ${filePatches.length} patches for ${file.path}: ${testResults.filter(r => r.passed).length} passed`,
       step: 'sandbox_test',
@@ -108,10 +105,8 @@ export const sandboxTestNode = async (state) => {
       file: state.currentFile?.path,
     });
 
-    // Move to next file on error
-    const updatedState = moveToNextFile(state);
-
-    return addMessage(updatedState, {
+    // Return state on error (workflow will handle moving to next file)
+    return addMessage(state, {
       role: 'system',
       content: `Sandbox testing failed for ${state.currentFile?.path}: ${error.message}`,
       step: 'sandbox_test_error',
