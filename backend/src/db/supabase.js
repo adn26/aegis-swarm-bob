@@ -65,6 +65,22 @@ export const testConnection = async () => {
   }
 };
 
-export default { initSupabase, getSupabase, testConnection };
+/**
+ * Close database connection (cleanup)
+ */
+export const closeDatabase = () => {
+  try {
+    // Supabase client doesn't require explicit closing
+    // but we can clean up the reference
+    if (supabaseClient) {
+      logger.info('Cleaning up Supabase client');
+      supabaseClient = null;
+    }
+  } catch (error) {
+    logger.error('Error during database cleanup:', error);
+  }
+};
+
+export default { initSupabase, getSupabase, testConnection, closeDatabase };
 
 // Made with Bob

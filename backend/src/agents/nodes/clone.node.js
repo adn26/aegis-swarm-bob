@@ -1,4 +1,4 @@
-import { cloneRepository } from '../../github/clone.service.js';
+import cloneService from '../../github/clone.service.js';
 import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
@@ -20,11 +20,11 @@ export const cloneRepositoryNode = async (state) => {
     });
 
     // Clone the repository
-    const workspacePath = await cloneRepository(
+    const cloneResult = await cloneService.cloneRepository(
       state.repoUrl,
-      state.branch,
-      state.prNumber
+      state.branch
     );
+    const workspacePath = cloneResult.workspacePath;
 
     // Update audit in database
     await storageService.updateAudit(state.auditId, {

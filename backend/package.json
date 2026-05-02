@@ -21,9 +21,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.9",
     "@langchain/core": "^0.2.0",
+    "@langchain/google-vertexai": "^2.1.30",
     "@langchain/langgraph": "^0.0.34",
+    "@langchain/openai": "^0.0.28",
     "@octokit/rest": "^20.0.2",
     "@supabase/supabase-js": "^2.105.1",
     "cors": "^2.8.5",

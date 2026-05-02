@@ -1,7 +1,7 @@
 import createApp from './src/app.js';
 import config from './src/config/index.js';
 import logger from './src/utils/logger.js';
-import { closeDatabase } from './src/db/init.js';
+import { closeDatabase } from './src/db/supabase.js';
 
 const app = createApp();
 

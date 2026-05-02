@@ -1,4 +1,4 @@
-import { scanDirectory } from '../../scanner/fileScanner.js';
+import fileScanner from '../../scanner/fileScanner.js';
 import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
@@ -19,7 +19,7 @@ export const scanFilesNode = async (state) => {
     });
 
     // Scan the directory for files
-    const files = await scanDirectory(state.workspacePath);
+    const files = await fileScanner.scanDirectory(state.workspacePath);
 
     logger.info(`Found ${files.length} files to analyze`);
 
