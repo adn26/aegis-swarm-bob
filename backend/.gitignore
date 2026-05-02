@@ -5,6 +5,9 @@ package-lock.json
 # Environment variables
 .env
 
+# Service Account Creds
+iwealthx-b7545-0972fcc3cf14.json
+
 # Database
 data/
 *.db

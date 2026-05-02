@@ -1,5 +1,6 @@
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { ChatOpenAI } from '@langchain/openai';
+import { execSync } from 'child_process';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { AgentError } from '../utils/errors.js';
@@ -28,6 +29,138 @@ class AIProvider {
    */
   getModel() {
     return this.model;
+  }
+}
+
+/**
+ * Token cache for GLM-5 authentication
+ * Tokens expire after ~1 hour, so we cache and refresh as needed
+ */
+let cachedToken = null;
+let tokenExpiry = null;
+
+/**
+ * Vertex AI - GLM-5 Provider (OpenAI-compatible endpoint)
+ * Used for both Red Team and Blue Team agents
+ */
+class VertexGLM5Provider extends AIProvider {
+  constructor() {
+    super('Vertex AI - GLM-5 (OpenAI-compatible)');
+    
+    // Get fresh access token
+    const accessToken = this.getAccessToken();
+    
+    this.model = new ChatOpenAI({
+      modelName: config.ai.vertexAI.glm5.model,
+      temperature: config.ai.vertexAI.glm5.temperature,
+      maxTokens: config.ai.vertexAI.glm5.maxTokens,
+      openAIApiKey: accessToken, // Use gcloud token as apiKey
+      configuration: {
+        baseURL: config.ai.vertexAI.glm5.baseURL,
+      }
+    });
+
+    logger.info(`Initialized ${this.name}: ${config.ai.vertexAI.glm5.model}`);
+    logger.info(`Base URL: ${config.ai.vertexAI.glm5.baseURL}`);
+  }
+
+  /**
+   * Get Google Cloud access token via gcloud CLI
+   * Implements caching with 50-minute expiry (tokens last ~60 minutes)
+   */
+  getAccessToken() {
+    const now = Date.now();
+    
+    // Return cached token if still valid (with 10-minute buffer)
+    if (cachedToken && tokenExpiry && now < tokenExpiry) {
+      logger.debug('Using cached gcloud access token');
+      return cachedToken;
+    }
+
+    try {
+      logger.info('Fetching fresh gcloud access token...');
+      const token = execSync('gcloud auth print-access-token', {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'] // Suppress stderr
+      }).trim();
+      
+      if (!token || token.length === 0) {
+        throw new Error('Empty token returned from gcloud');
+      }
+
+      // Cache token with 50-minute expiry (10-minute buffer before actual expiry)
+      cachedToken = token;
+      tokenExpiry = now + (50 * 60 * 1000); // 50 minutes
+      
+      logger.info('Successfully fetched and cached gcloud access token');
+      return token;
+    } catch (error) {
+      logger.error('Failed to fetch gcloud access token:', error);
+      throw new AgentError(
+        'Vertex AI GLM-5',
+        'Failed to authenticate with gcloud',
+        'Ensure gcloud CLI is installed and authenticated: gcloud auth login'
+      );
+    }
+  }
+
+  /**
+   * Refresh token if needed before making requests
+   */
+  async ensureValidToken() {
+    const now = Date.now();
+    
+    // Refresh if token is expired or about to expire
+    if (!cachedToken || !tokenExpiry || now >= tokenExpiry) {
+      const newToken = this.getAccessToken();
+      
+      // Update the model's API key with fresh token
+      this.model = new ChatOpenAI({
+        modelName: config.ai.vertexAI.glm5.model,
+        temperature: config.ai.vertexAI.glm5.temperature,
+        maxTokens: config.ai.vertexAI.glm5.maxTokens,
+        openAIApiKey: newToken,
+        configuration: {
+          baseURL: config.ai.vertexAI.glm5.baseURL,
+        }
+      });
+      
+      logger.info('Refreshed GLM-5 model with new access token');
+    }
+  }
+
+  async generateCompletion(prompt, options = {}) {
+    try {
+      await this.ensureValidToken();
+      
+      const response = await this.model.invoke([
+        { role: 'user', content: prompt }
+      ]);
+
+      return response.content;
+    } catch (error) {
+      logger.error('Vertex AI GLM-5 error:', error);
+      throw new AgentError('Vertex AI GLM-5', 'Failed to generate completion', error.message);
+    }
+  }
+
+  async *streamCompletion(prompt, options = {}) {
+    try {
+      await this.ensureValidToken();
+      
+      const stream = await this.model.stream([
+        { role: 'user', content: prompt }
+      ]);
+
+      for await (const chunk of stream) {
+        if (chunk.content) {
+          yield chunk.content;
+        }
+      }
+    } catch (error) {
+      logger.error('Vertex AI GLM-5 streaming error:', error);
+      throw new AgentError('Vertex AI GLM-5', 'Failed to stream completion', error.message);
+    }
   }
 }
 
@@ -384,6 +517,11 @@ class OllamaProvider extends AIProvider {
 class AIProviderFactory {
   static createProvider(agentRole = 'default') {
     const provider = config.ai.provider;
+
+    // For Vertex AI GLM-5, use same model for all agents
+    if (provider === 'vertex-glm5') {
+      return new VertexGLM5Provider();
+    }
 
     // For Vertex AI Claude, select model based on agent role
     if (provider === 'vertex-claude') {
