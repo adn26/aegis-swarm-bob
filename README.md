@@ -19,8 +19,8 @@ An adversarial multi-agent security auditing system that analyzes GitHub reposit
 Frontend (React) ←→ Backend (Express + LangGraph) ←→ Supabase (PostgreSQL)
                             ↓
                     Google Vertex AI
-                    ├─ Claude 3.5 Sonnet (Security Analysis)
-                    └─ Gemini 1.5 Pro (Alternative)
+                    ├─ Claude 4.6 Opus (Security Analysis)
+                    └─ Gemini 3.1 Pro (Alternative)
                             ↓
                     Docker Sandbox (Verification)
 ```
@@ -38,8 +38,8 @@ Frontend (React) ←→ Backend (Express + LangGraph) ←→ Supabase (PostgreSQ
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/aegis-swarm.git
-cd aegis-swarm
+git clone https://github.com/adn26/aegis-swarm-bob.git
+cd aegis-swarm-bob
 ```
 
 ### 2. Setup Supabase
@@ -79,11 +79,11 @@ AI_PROVIDER=vertex-claude
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 VERTEX_AI_PROJECT_ID=your-gcp-project-id
 VERTEX_AI_LOCATION=us-central1
-VERTEX_CLAUDE_MODEL=claude-3-5-sonnet@20240620
+VERTEX_CLAUDE_MODEL=claude-4-6-opus
 
 # Or use Gemini via Vertex AI
 # AI_PROVIDER=vertex-gemini
-# VERTEX_GEMINI_MODEL=gemini-1.5-pro
+# VERTEX_GEMINI_MODEL=gemini-3-1-pro
 
 # Or OpenAI (Alternative)
 # AI_PROVIDER=openai
@@ -115,7 +115,7 @@ Server will start at `http://localhost:3000`
 
 ```env
 AI_PROVIDER=vertex-claude
-VERTEX_CLAUDE_MODEL=claude-3-5-sonnet@20240620
+VERTEX_CLAUDE_MODEL=claude-4-6-opus
 ```
 
 **Advantages:**
@@ -129,7 +129,7 @@ VERTEX_CLAUDE_MODEL=claude-3-5-sonnet@20240620
 
 ```env
 AI_PROVIDER=vertex-gemini
-VERTEX_GEMINI_MODEL=gemini-1.5-pro
+VERTEX_GEMINI_MODEL=gemini-3-1-pro
 ```
 
 **Advantages:**
@@ -323,7 +323,7 @@ MIT License - see LICENSE file for details
 ## 📞 Support
 
 For issues and questions:
-- GitHub Issues: [Create an issue](https://github.com/yourusername/aegis-swarm/issues)
+- GitHub Issues: [Create an issue](https://github.com/adn26/aegis-swarm-bob/issues)
 - Documentation: [Read the docs](docs/)
 - Vertex AI Setup: [Setup Guide](docs/VERTEX_AI_SETUP.md)
 
