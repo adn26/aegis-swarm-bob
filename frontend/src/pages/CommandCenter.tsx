@@ -1,144 +1,6 @@
-import { useParams, Link } from 'react-router-dom';
 import '../styles/command-center.css';
 
-function AuditDashboard() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  
-  const [audit, setAudit] = useState<Audit | null>(null);
-  const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
-  const [patches, setPatches] = useState<Patch[]>([]);
-  const [events, setEvents] = useState<SSEEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
-
-  // Fetch initial audit data
-  useEffect(() => {
-    if (!id) return;
-
-    const fetchAuditData = async () => {
-      try {
-        setLoading(true);
-        const auditData = await apiService.getAudit(id);
-        setAudit(auditData);
-
-        // Fetch vulnerabilities and patches if audit is completed or in progress
-        if (auditData.status !== 'pending') {
-          const [vulns, patchesData] = await Promise.all([
-            apiService.getVulnerabilities(id),
-            apiService.getPatches(id),
-          ]);
-          setVulnerabilities(vulns);
-          setPatches(patchesData);
-        }
-      } catch (err) {
-        console.error('Failed to fetch audit:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load audit');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAuditData();
-  }, [id]);
-
-  // Setup SSE connection
-  useEffect(() => {
-    if (!id) return;
-
-    console.log('Connecting to SSE for audit:', id);
-    
-    sseService.connect(id);
-    setConnected(true);
-
-    // Listen for all events
-    const handleEvent = (event: SSEEvent) => {
-      console.log('SSE Event:', event);
-      setEvents(prev => [...prev, event]);
-
-      // Update audit data based on events
-      if (event.type === 'vulnerability_found' && event.data) {
-        setVulnerabilities(prev => [...prev, event.data as Vulnerability]);
-      }
-      
-      if (event.type === 'patch_generated' && event.data) {
-        setPatches(prev => [...prev, event.data as Patch]);
-      }
-
-      if (event.type === 'audit_completed') {
-        // Refresh audit data
-        if (id) {
-          apiService.getAudit(id).then(setAudit);
-        }
-      }
-    };
-
-    sseService.on('connected', handleEvent);
-    sseService.on('audit_started', handleEvent);
-    sseService.on('repo_cloned', handleEvent);
-    sseService.on('files_scanned', handleEvent);
-    sseService.on('redteam_analyzing', handleEvent);
-    sseService.on('vulnerability_found', handleEvent);
-    sseService.on('blueteam_patching', handleEvent);
-    sseService.on('patch_generated', handleEvent);
-    sseService.on('sandbox_deploying', handleEvent);
-    sseService.on('tests_running', handleEvent);
-    sseService.on('test_results', handleEvent);
-    sseService.on('audit_completed', handleEvent);
-    sseService.on('error', handleEvent);
-    sseService.on('progress', handleEvent);
-
-    return () => {
-      console.log('Disconnecting SSE');
-      sseService.disconnect();
-      setConnected(false);
-    };
-  }, [id]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-slate-600">Loading audit data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !audit) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="max-w-md w-full">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-red-900 text-center mb-2">
-              Failed to Load Audit
-            </h2>
-            <p className="text-red-700 text-center mb-4">
-              {error || 'Audit not found'}
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              className="btn btn-primary w-full"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Home
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const severityCounts = {
-    critical: vulnerabilities.filter(v => v.severity === 'Critical').length,
-    high: vulnerabilities.filter(v => v.severity === 'High').length,
-    medium: vulnerabilities.filter(v => v.severity === 'Medium').length,
-    low: vulnerabilities.filter(v => v.severity === 'Low').length,
-  };
-
+function Home() {
   const sendPrompt = (msg: string) => {
     console.log('Sending prompt:', msg);
   };
@@ -269,7 +131,6 @@ function AuditDashboard() {
               </div>
             </div>
           </div>
-        </div>
 
           <div className="cc-judge-panel">
             <div className="cc-judge-header">
@@ -306,66 +167,10 @@ function AuditDashboard() {
                 <div className="cc-sandbox-step-val idle" style={{ color: '#3a2c10' }}>— Queued</div>
               </div>
             </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.total_vulnerabilities || 0}
-            </p>
-            <div className="mt-3 flex gap-2 text-xs">
-              <span className="px-2 py-1 bg-red-100 text-red-700 rounded">
-                {severityCounts.critical} Critical
-              </span>
-              <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
-                {severityCounts.high} High
-              </span>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-600">
-                Files Scanned
-              </h3>
-              <FileCode className="w-5 h-5 text-blue-500" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.scanned_files || 0}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">
-              of {audit.total_files || 0} total
-            </p>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-600">
-                Patches Generated
-              </h3>
-              <Wrench className="w-5 h-5 text-green-500" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.patches_applied || 0}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">
-              {audit.tests_passed ? 'Tests passed' : 'Testing...'}
-            </p>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-slate-600">
-                Duration
-              </h3>
-              <Clock className="w-5 h-5 text-indigo-500" />
-            </div>
-            <p className="text-3xl font-bold text-slate-900">
-              {audit.completed_at && audit.started_at
-                ? Math.round((new Date(audit.completed_at).getTime() - new Date(audit.started_at).getTime()) / 1000)
-                : '-'}
-            </p>
-            <p className="text-sm text-slate-500 mt-1">seconds</p>
           </div>
 
           <div className="cc-action-row">
-            <Link to={`/report/red-team/${id || 'pr247'}`} className="cc-btn cc-btn-gold">View full report ↗</Link>
+            <button className="cc-btn cc-btn-gold" onClick={() => sendPrompt('Show me the full Red Team exploit report for PR #247')}>View full report ↗</button>
             <button className="cc-btn cc-btn-ghost" onClick={() => sendPrompt('Explain the race condition vulnerability found in the transfer endpoint')}>Explain vuln ↗</button>
             <button className="cc-btn cc-btn-ghost" onClick={() => sendPrompt('What would happen if the sandbox verdict fails?')}>What if it fails? ↗</button>
           </div>
@@ -375,5 +180,4 @@ function AuditDashboard() {
   );
 }
 
-export default AuditDashboard;
-
+export default Home;

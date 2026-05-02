@@ -1,46 +1,17 @@
 import { Link } from 'react-router-dom';
+import '../../styles/command-center.css';
 
 function Header() {
   return (
-    <header className="bg-bg-secondary border-b border-border-primary sticky top-0 z-50 backdrop-blur-sm bg-opacity-95">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="text-3xl">🛡️</div>
-            <div>
-              <h1 className="text-xl font-bold text-gradient group-hover:opacity-80 transition-opacity">
-                Aegis Swarm
-              </h1>
-              <p className="text-xs text-text-tertiary">Security Command Center</p>
-            </div>
+    <header className="cc-body" style={{ minHeight: 'auto', padding: '16px 24px', borderBottom: '0.5px solid #2a2000' }}>
+      <div className="w-full">
+        <div className="cc-topbar" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 0 }}>
+          <Link to="/" className="cc-logo" style={{ textDecoration: 'none' }}>
+            Aegis<span> //</span> Swarm
           </Link>
-
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
-            <Link
-              to="/"
-              className="text-text-secondary hover:text-gold transition-colors"
-            >
-              Home
-            </Link>
-            <a
-              href="https://github.com/adn26/aegis-swarm-bob"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-text-secondary hover:text-gold transition-colors flex items-center gap-2"
-            >
-              <span>GitHub</span>
-              <span className="text-sm">↗</span>
-            </a>
-          </nav>
-
-          {/* Status Indicator */}
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-sm text-text-tertiary hidden sm:inline">
-              Online
-            </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span className="cc-status-dot online"></span>
+            <span className="cc-status-label" style={{ fontSize: '11px', letterSpacing: '1.5px' }}>SYSTEM ONLINE</span>
           </div>
         </div>
       </div>
@@ -49,5 +20,3 @@ function Header() {
 }
 
 export default Header;
-
-// Made with Bob

@@ -1,179 +1,178 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Shield, ShieldAlert, ShieldCheck, Box, Github, Loader2, AlertCircle } from 'lucide-react';
-import { apiService } from '../services/api.service';
+import '../styles/command-center.css';
 
 function Home() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    repoUrl: '',
-    branch: '',
-    prNumber: '',
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    
-    try {
-      console.log('Starting scan:', formData);
-      
-      // Call the API to start the audit
-      const response = await apiService.startAudit({
-        repoUrl: formData.repoUrl,
-        branch: formData.branch || undefined,
-        prNumber: formData.prNumber ? parseInt(formData.prNumber) : undefined,
-      });
-
-      console.log('Audit started:', response);
-
-      // Navigate to the audit dashboard
-      if (response.data?.auditId) {
-        navigate(`/audit/${response.data.auditId}`);
-      } else {
-        throw new Error('No audit ID returned from server');
-      }
-    } catch (err) {
-      console.error('Failed to start scan:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start scan. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  const sendPrompt = (msg: string) => {
+    console.log('Sending prompt:', msg);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="max-w-5xl w-full">
-        {/* Hero Section */}
-        <div className="text-center mb-16 animate-fade-in">
-          <div className="inline-flex items-center justify-center p-3 bg-indigo-100 rounded-2xl mb-6 shadow-sm">
-            <Shield className="w-10 h-10 text-indigo-600" />
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
-            Aegis Swarm Security
-          </h1>
-          <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
-            Adversarial multi-agent security auditing powered by AI. Uncover vulnerabilities before they reach production.
-          </p>
-        </div>
-
-        {/* Main Form Card */}
-        <div className="card max-w-3xl mx-auto animate-slide-up mb-16">
-          <div className="flex items-center gap-3 mb-8 border-b border-slate-100 pb-6">
-            <Github className="w-6 h-6 text-slate-700" />
-            <h2 className="text-xl font-semibold text-slate-900">
-              New Security Audit
-            </h2>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="flex justify-center p-6 w-full">
+      <div className="w-full">
+        <div className="cc-root">
+          <div className="cc-pr-header">
+            <div className="cc-status-dot"></div>
             <div>
-              <label htmlFor="repoUrl" className="block text-sm font-medium mb-2 text-slate-700">
-                Repository URL
-              </label>
-              <input
-                type="url"
-                id="repoUrl"
-                className="input"
-                placeholder="https://github.com/username/repository"
-                value={formData.repoUrl}
-                onChange={(e) => setFormData({ ...formData, repoUrl: e.target.value })}
-                required
-              />
+              <div className="cc-pr-title">Pull Request</div>
+              <div className="cc-pr-name">feat: add concurrent withdrawal endpoint — /api/v2/transfer</div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="branch" className="block text-sm font-medium mb-2 text-slate-700">
-                  Branch <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  id="branch"
-                  className="input"
-                  placeholder="main"
-                  value={formData.branch}
-                  onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="prNumber" className="block text-sm font-medium mb-2 text-slate-700">
-                  PR Number <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="number"
-                  id="prNumber"
-                  className="input"
-                  placeholder="123"
-                  value={formData.prNumber}
-                  onChange={(e) => setFormData({ ...formData, prNumber: e.target.value })}
-                />
-              </div>
+            <div className="cc-pr-meta" style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <div>adnan-dev → main</div>
+              <div>iWealthX · 3 files changed</div>
             </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-900 mb-1">Failed to start audit</p>
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="pt-4">
-              <button
-                type="submit"
-                className="btn btn-primary w-full text-base shadow-md"
-                disabled={loading}
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Initializing Agents...
-                  </span>
-                ) : (
-                  'Start Security Audit'
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card-hover">
-            <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center mb-4">
-              <ShieldAlert className="w-6 h-6 text-red-600" />
-            </div>
-            <h3 className="font-semibold text-slate-900 mb-2">Red Team Analysis</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              AI-powered vulnerability detection that proactively searches for structural and logical flaws in your codebase.
-            </p>
           </div>
 
-          <div className="card-hover">
-            <div className="w-12 h-12 bg-indigo-50 rounded-lg flex items-center justify-center mb-4">
-              <ShieldCheck className="w-6 h-6 text-indigo-600" />
+          <div className="cc-timeline" style={{ marginBottom: '14px' }}>
+            <div className="cc-tl-step">
+              <div className="cc-tl-dot done">✓</div>
+              <div className="cc-tl-label">PR ingested</div>
             </div>
-            <h3 className="font-semibold text-slate-900 mb-2">Blue Team Remediation</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Automated patch generation and security hardening recommendations tailored to your specific framework.
-            </p>
+            <div className="cc-tl-step">
+              <div className="cc-tl-dot done">✓</div>
+              <div className="cc-tl-label">Red team</div>
+            </div>
+            <div className="cc-tl-step">
+              <div className="cc-tl-dot active">→</div>
+              <div className="cc-tl-label active">Blue team</div>
+            </div>
+            <div className="cc-tl-step">
+              <div className="cc-tl-dot idle">□</div>
+              <div className="cc-tl-label">Sandbox</div>
+            </div>
+            <div className="cc-tl-step">
+              <div className="cc-tl-dot idle">□</div>
+              <div className="cc-tl-label">Verdict</div>
+            </div>
           </div>
 
-          <div className="card-hover">
-            <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center mb-4">
-              <Box className="w-6 h-6 text-emerald-600" />
+          <div className="cc-metrics">
+            <div className="cc-metric">
+              <div className="cc-metric-label">Vulns found</div>
+              <div className="cc-metric-val red">2</div>
             </div>
-            <h3 className="font-semibold text-slate-900 mb-2">Isolated Sandbox</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Secure, isolated environments where generated patches are verified against existing test suites safely.
-            </p>
+            <div className="cc-metric">
+              <div className="cc-metric-label">Patches gen.</div>
+              <div className="cc-metric-val amber">1</div>
+            </div>
+            <div className="cc-metric">
+              <div className="cc-metric-label">Sandbox runs</div>
+              <div className="cc-metric-val">0</div>
+            </div>
+            <div className="cc-metric">
+              <div className="cc-metric-label">Time elapsed</div>
+              <div className="cc-metric-val">1m 42s</div>
+            </div>
+          </div>
+
+          <div className="cc-arena">
+            <div className="cc-team" style={{ background: '#080400' }}>
+              <div className="cc-team-header">
+                <div className="cc-team-icon red">⚔</div>
+                <span className="cc-team-name red">Red Team</span>
+                <span className="cc-team-status">COMPLETE</span>
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">00:00:12</div>
+                <div className="cc-log-msg">Scanning diff for async state mutations...</div>
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">00:00:31</div>
+                <div className="cc-log-msg danger">CRITICAL: Race condition detected in balance debit path. No atomic lock on getBalance → debit sequence.</div>
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">00:00:48</div>
+                <div className="cc-log-msg">Generating exploit — firing 50 concurrent requests before balance commit...</div>
+              </div>
+              <div className="cc-code-block">
+                <span className="cmt">// exploit.js — double-spend via race</span><br />
+                <span className="kw">const</span> reqs = Array(50).fill(<span className="kw">null</span>).map({'() =>'}<br />
+                &nbsp;&nbsp;fetch(<span className="str">'/api/v2/transfer'</span>, &#123;<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;method: <span className="str">'POST'</span>,<br />
+                &nbsp;&nbsp;&nbsp;&nbsp;body: JSON.stringify(&#123; amount: 9999, to: <span className="str">'atk'</span> &#125;)<br />
+                &nbsp;&nbsp;&#125;)<br />
+                );<br />
+                <span className="kw">await</span> Promise.all(reqs);<br />
+                <span className="cmt">// Expected: balance < 0 → funds drained</span>
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">01:02:00</div>
+                <div className="cc-log-msg danger">SECONDARY: Missing idempotency key validation. Same tx can replay across sessions.</div>
+              </div>
+            </div>
+            <div className="cc-divider"></div>
+            <div className="cc-team" style={{ background: '#040408' }}>
+              <div className="cc-team-header">
+                <div className="cc-team-icon blue">🛡</div>
+                <span className="cc-team-name blue">Blue Team</span>
+                <span className="cc-team-status" style={{ animation: 'cc-pulse 1.5s infinite', color: '#c9a84c' }}>PATCHING...</span>
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">01:02:08</div>
+                <div className="cc-log-msg">Received Red Team exploit. Analyzing attack vector...</div>
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">01:02:24</div>
+                <div className="cc-log-msg highlight">Strategy: wrap debit in DB-level row lock + Redis mutex per account ID.</div>
+              </div>
+              <div className="cc-code-block">
+                <span className="cmt">// patch: atomic lock on transfer</span><br />
+                <span className="kw">const</span> lock = <span className="kw">await</span> redis.set(<br />
+                &nbsp;&nbsp;<span className="str">`lock:$&#123;accountId&#125;`</span>, <span className="str">'1'</span>,<br />
+                &nbsp;&nbsp;<span className="str">'NX'</span>, <span className="str">'PX'</span>, 3000<br />
+                );<br />
+                <span className="kw">if</span> (!lock) <span className="kw">throw</span> <span className="kw">new</span> Error(<span className="str">'Concurrent tx'</span>);<br />
+                <span className="kw">await</span> db.transaction(<span className="kw">async</span> (trx) {'=>'} &#123;<br />
+                &nbsp;&nbsp;<span className="kw">await</span> trx.raw(<span className="str">'SELECT ... FOR UPDATE'</span>);<br />
+                &nbsp;&nbsp;<span className="cmt">// debit only after lock acquired</span><br />
+                &#125;);
+              </div>
+              <div className="cc-log-entry">
+                <div className="cc-log-time">01:02:41</div>
+                <div className="cc-log-msg">Patch generated. Awaiting sandbox verification...</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="cc-judge-panel">
+            <div className="cc-judge-header">
+              <span style={{ fontSize: '13px', color: '#6a5820' }}>⚖</span>
+              <span className="cc-judge-title">Sandbox Judge</span>
+              <div className="cc-verdict">
+                <span className="cc-verdict-label">VERDICT</span>
+                <span className="cc-verdict-val pending">PENDING</span>
+              </div>
+            </div>
+            <div className="cc-sandbox-grid">
+              <div className="cc-sandbox-step">
+                <div className="cc-sandbox-step-label">Docker env</div>
+                <div className="cc-sandbox-step-val ok">✓ Spawned</div>
+              </div>
+              <div className="cc-sandbox-step">
+                <div className="cc-sandbox-step-label">Patch applied</div>
+                <div className="cc-sandbox-step-val ok">✓ Compiled</div>
+              </div>
+              <div className="cc-sandbox-step">
+                <div className="cc-sandbox-step-label">Exploit run</div>
+                <div className="cc-sandbox-step-val run">● Running</div>
+              </div>
+              <div className="cc-sandbox-step">
+                <div className="cc-sandbox-step-label">Balance integrity</div>
+                <div className="cc-sandbox-step-val run">● Checking</div>
+              </div>
+              <div className="cc-sandbox-step">
+                <div className="cc-sandbox-step-label">Replay attack</div>
+                <div className="cc-sandbox-step-val idle" style={{ color: '#3a2c10' }}>— Queued</div>
+              </div>
+              <div className="cc-sandbox-step">
+                <div className="cc-sandbox-step-label">Final score</div>
+                <div className="cc-sandbox-step-val idle" style={{ color: '#3a2c10' }}>— Queued</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="cc-action-row">
+            <button className="cc-btn cc-btn-gold" onClick={() => sendPrompt('Show me the full Red Team exploit report for PR #247')}>View full report ↗</button>
+            <button className="cc-btn cc-btn-ghost" onClick={() => sendPrompt('Explain the race condition vulnerability found in the transfer endpoint')}>Explain vuln ↗</button>
+            <button className="cc-btn cc-btn-ghost" onClick={() => sendPrompt('What would happen if the sandbox verdict fails?')}>What if it fails? ↗</button>
           </div>
         </div>
       </div>
