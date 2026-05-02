@@ -25,13 +25,17 @@ export interface AuditRequest {
   repoUrl: string;
   prNumber?: number;
   branch?: string;
+  repo_url?: string;
+  pr_number?: number;
 }
 
 export interface AuditResponse {
   success: boolean;
   message: string;
+  id?: string;
   data: {
     auditId: string;
+    id?: string;
     status: string;
     repoUrl: string;
     branch?: string;

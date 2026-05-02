@@ -26,9 +26,13 @@
 .cc-metric-val.red { color: #c0392b; }
 .cc-metric-val.green { color: #27ae60; }
 .cc-metric-val.amber { color: #c9a84c; }
-.cc-arena { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0; border: 0.5px solid #1a1200; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+.cc-arena { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0; border: 0.5px solid #1a1200; border-radius: 8px; overflow: hidden; margin-bottom: 20px; min-height: 400px; max-height: 600px; }
 .cc-divider { background: #1a1200; }
-.cc-team { padding: 20px; }
+.cc-team { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+.cc-team::-webkit-scrollbar { width: 6px; }
+.cc-team::-webkit-scrollbar-track { background: transparent; }
+.cc-team::-webkit-scrollbar-thumb { background: #1a1200; border-radius: 4px; }
+.cc-team::-webkit-scrollbar-thumb:hover { background: #2a2000; }
 .cc-team-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 0.5px solid #1a1200; }
 .cc-team-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
 .cc-team-icon.red { background: #2a0a0a; color: #c0392b; border: 0.5px solid #3a1010; }

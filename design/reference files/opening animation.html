@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AEGIS // SWARM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0b08;
+    --bg2: #0f1009;
+    --gold: #c8a84b;
+    --gold-dim: #8a6f2e;
+    --green: #4caf50;
+    --red: #e05252;
+    --amber: #e0922a;
+    --text: #c8c9b8;
+    --text-dim: #5a5c4a;
+    --border: #1e201a;
+    --border-mid: #2a2d22;
+    --mono: 'Courier New', 'Lucida Console', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── INTRO OVERLAY ── */
+  #intro {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  #boot-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    line-height: 1.9;
+    width: 360px;
+  }
+
+  #boot-text .line {
+    opacity: 0;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  #boot-text .ok   { color: var(--green);  }
+  #boot-text .warn { color: var(--amber);  }
+  #boot-text .err  { color: var(--red);    }
+  #boot-text .hi   { color: var(--text);   }
+
+  #wordmark {
+    font-family: var(--mono);
+    font-size: 22px;
+    letter-spacing: 0.35em;
+    color: var(--gold);
+    text-transform: uppercase;
+    opacity: 0;
+  }
+
+  #wordmark span { color: var(--text-dim); }
+
+  #scan-line {
+    position: fixed;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(200,168,75,0.35), transparent);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 101;
+  }
+
+  /* ── MAIN UI ── */
+  #ui {
+    opacity: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* top bar */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.6);
+  }
+
+  #topbar .logo { color: var(--text-dim); letter-spacing: 0.2em; font-size: 10px; }
+  #topbar .logo b { color: var(--text); }
+
+  #topbar .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+  }
+
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  /* sub bar */
+  #subbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 20px 10px;
+  }
+
+  #subbar .title { font-size: 15px; letter-spacing: 0.22em; color: var(--text); }
+  #subbar .title b { color: var(--gold); }
+  #subbar .badge {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    border: 1px solid var(--border-mid);
+    padding: 3px 8px;
+  }
+
+  /* status row */
+  #status-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 6px 20px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tag { display: flex; align-items: center; gap: 5px; font-size: 9px; letter-spacing: 0.12em; }
+  .tag .dot-sm { width: 5px; height: 5px; border-radius: 50%; }
+  .tag.green .dot-sm  { background: var(--green);  box-shadow: 0 0 4px var(--green); }
+  .tag.amber .dot-sm  { background: var(--amber);  box-shadow: 0 0 4px var(--amber); }
+  .tag-label { color: var(--text-dim); }
+  .tag-label b { color: var(--text); }
+
+  .ts { margin-left: auto; font-size: 9px; color: var(--text-dim); letter-spacing: 0.12em; }
+
+  /* content */
+  #content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    flex: 1;
+  }
+
+  /* left panel */
+  #left {
+    padding: 20px;
+    border-right: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-title::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--gold-dim);
+    display: inline-block;
+  }
+
+  .field-label {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  .field-input {
+    width: 100%;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-mid);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 8px 10px;
+    margin-bottom: 16px;
+    letter-spacing: 0.08em;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .field-input:focus { border-color: var(--gold-dim); }
+  .field-input::placeholder { color: var(--text-dim); opacity: 0.5; }
+
+  .hint { font-size: 9px; color: var(--text-dim); opacity: 0.5; margin-top: -12px; margin-bottom: 16px; }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .deploy-btn {
+    width: 100%;
+    background: var(--gold);
+    border: none;
+    color: #1a1500;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    padding: 13px;
+    cursor: pointer;
+    text-transform: uppercase;
+    margin-top: 8px;
+    transition: background 0.15s;
+  }
+
+  .deploy-btn:hover { background: #d4b055; }
+
+  .nav-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .nav-card {
+    border: 1px solid var(--border-mid);
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .nav-card:first-child { border-left: 2px solid #3a6bcc; }
+  .nav-card:hover { border-color: var(--gold-dim); }
+
+  .nav-card .nc-title { font-size: 9px; letter-spacing: 0.15em; color: var(--text); margin-bottom: 3px; }
+  .nav-card .nc-sub   { font-size: 8px; color: var(--text-dim); }
+
+  /* right panel */
+  #right { padding: 20px; }
+
+  .activity-item {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .ai-name { font-size: 10px; letter-spacing: 0.1em; color: var(--text); }
+  .ai-meta { font-size: 9px; color: var(--text-dim); }
+  .ai-dot  { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .ai-dot.g { background: var(--green); }
+  .ai-dot.r { background: var(--red); }
+  .ai-dot.a { background: var(--amber); }
+
+  /* noise overlay */
+  #noise {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 99;
+    opacity: 0.018;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+</style>
+</head>
+<body>
+
+<div id="noise"></div>
+<div id="scan-line"></div>
+
+<!-- INTRO -->
+<div id="intro">
+  <div id="wordmark">AEGIS <span>//</span> SWARM</div>
+  <div id="boot-text">
+    <span class="line hi">[ AEGIS SWARM v2.4.1 ]</span>
+    <span class="line">initializing kernel modules ............ <b class="ok">OK</b></span>
+    <span class="line">loading agent registry ................. <b class="ok">OK</b></span>
+    <span class="line">establishing secure channel ............ <b class="ok">OK</b></span>
+    <span class="line">validating red_team config ............. <b class="ok">OK</b></span>
+    <span class="line">validating blue_team config ............ <b class="ok">OK</b></span>
+    <span class="line">provisioning sandbox environment ....... <b class="warn">WARN</b></span>
+    <span class="line">mounting audit filesystem .............. <b class="ok">OK</b></span>
+    <span class="line">system ready ........................... <b class="ok">ONLINE</b></span>
+  </div>
+</div>
+
+<!-- MAIN UI -->
+<div id="ui">
+  <!-- topbar -->
+  <div id="topbar">
+    <div class="logo"><b>AEGIS</b> // SWARM</div>
+    <div class="status"><div class="dot"></div>SYSTEM_ONLINE</div>
+  </div>
+
+  <!-- subbar -->
+  <div id="subbar">
+    <div class="title"><b>AEGIS</b>SWARM // CMD_CTR</div>
+    <div class="badge">SYSTEM_ONLINE</div>
+  </div>
+
+  <!-- status row -->
+  <div id="status-row">
+    <div class="tag green"><div class="dot-sm"></div><div class="tag-label"><b>RED_TEAM</b> READY</div></div>
+    <div class="tag green"><div class="dot-sm"></div><div class="tag-label"><b>BLUE_TEAM</b> READY</div></div>
+    <div class="tag amber"><div class="dot-sm"></div><div class="tag-label"><b>SANDBOX</b> PROVISIONED</div></div>
+    <div class="ts">SERVER_TIME 20:07:43 UTC</div>
+  </div>
+
+  <!-- content -->
+  <div id="content">
+    <!-- left -->
+    <div id="left">
+      <div class="panel-title">INITIALIZE NEW AUDIT</div>
+
+      <div class="field-label">TARGET REPOSITORY URL</div>
+      <input class="field-input" placeholder="https://github.com/org/repo" />
+      <div class="hint">Public repositories or authenticated via internal tokens.</div>
+
+      <div class="row-2">
+        <div>
+          <div class="field-label">PR NUMBER <span style="opacity:0.4">(OPTIONAL)</span></div>
+          <input class="field-input" placeholder="e.g. 142" />
+        </div>
+        <div>
+          <div class="field-label">TARGET BRANCH <span style="opacity:0.4">(DEFAULT: MAIN)</span></div>
+          <input class="field-input" value="main" />
+        </div>
+      </div>
+
+      <button class="deploy-btn">DEPLOY AGENTS</button>
+
+      <div class="nav-cards">
+        <div class="nav-card">
+          <div class="nc-title">≡ &nbsp;AUDIT HISTORY →</div>
+          <div class="nc-sub">View past reports</div>
+        </div>
+        <div class="nav-card">
+          <div class="nc-title">⚙ &nbsp;CONFIG →</div>
+          <div class="nc-sub">Agent settings</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- right -->
+    <div id="right">
+      <div class="panel-title">RECENT ACTIVITY (MOCK)</div>
+      <div class="activity-item">
+        <div class="ai-name"><span class="ai-dot g"></span>iWealthX / core-api</div>
+        <div class="ai-meta">PR #245 · Passed · 2h ago</div>
+      </div>
+      <div class="activity-item">
+        <div class="ai-name"><span class="ai-dot r"></span>finance-utils / auth</div>
+        <div class="ai-meta">PR #12 · 2 Vulns · 5h ago</div>
+      </div>
+      <div class="activity-item">
+        <div class="ai-name"><span class="ai-dot a"></span>deficorp / smart-contracts</div>
+        <div class="ai-meta">PR #99 · 1 High Vuln · 1d ago</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
+
+// ── 1. Wordmark fades in
+tl.to('#wordmark', { opacity: 1, duration: 0.6, ease: 'power1.inOut' }, 0.3)
+
+// ── 2. Boot lines stagger in one by one
+  .to('#boot-text .line', {
+    opacity: 1,
+    stagger: 0.12,
+    duration: 0.01,
+    ease: 'none'
+  }, 0.9)
+
+// ── 3. Short hold
+  .addLabel('holdBoot', '+=0.5')
+
+// ── 4. Scan line sweeps down
+  .set('#scan-line', { top: '-2px', opacity: 1 }, 'holdBoot')
+  .to('#scan-line', {
+    top: '100vh',
+    duration: 0.7,
+    ease: 'power1.inOut'
+  }, 'holdBoot')
+
+// ── 5. Intro fades out (slightly after scan starts)
+  .to('#intro', {
+    opacity: 0,
+    duration: 0.35,
+    ease: 'power1.in'
+  }, 'holdBoot+=0.45')
+
+  .set('#intro', { display: 'none' })
+
+// ── 6. UI appears
+  .to('#ui', { opacity: 1, duration: 0.1 })
+
+// ── 7. Topbar slides down
+  .from('#topbar', {
+    y: -12,
+    opacity: 0,
+    duration: 0.4,
+    ease: 'power2.out'
+  }, '-=0.05')
+
+// ── 8. Subbar + status row
+  .from('#subbar, #status-row', {
+    opacity: 0,
+    y: -6,
+    stagger: 0.08,
+    duration: 0.35
+  }, '-=0.2')
+
+// ── 9. Left panel
+  .from('#left', {
+    opacity: 0,
+    x: -10,
+    duration: 0.45
+  }, '-=0.1')
+
+// ── 10. Left children stagger
+  .from('#left > *', {
+    opacity: 0,
+    y: 8,
+    stagger: 0.07,
+    duration: 0.35
+  }, '-=0.3')
+
+// ── 11. Right panel + activity items
+  .from('#right', {
+    opacity: 0,
+    x: 10,
+    duration: 0.45
+  }, '-=0.5')
+
+  .from('.activity-item', {
+    opacity: 0,
+    x: 6,
+    stagger: 0.1,
+    duration: 0.3
+  }, '-=0.25');
+</script>
+</body>
+</html>

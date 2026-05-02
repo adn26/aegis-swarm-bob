@@ -5,10 +5,11 @@
   background: #000;
   color: #c9a84c;
   font-family: var(--font-mono, monospace);
-  padding: 18px;
+  padding: 24px;
   border: 1px solid #1a1200;
-  border-radius: 8px;
-  max-width: 1000px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
 }
 .report-container .rh {
@@ -16,30 +17,30 @@
   align-items: flex-start;
   justify-content: space-between;
   border-bottom: 0.5px solid #1a1200;
-  padding-bottom: 14px;
-  margin-bottom: 18px;
+  padding-bottom: 16px;
+  margin-bottom: 24px;
 }
 .report-container .rtitle {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: #4a3c18;
+  font-size: 13px;
+  letter-spacing: 2.5px;
+  color: #6a5820;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .report-container .rname {
-  font-size: 15px;
+  font-size: 20px;
   color: #d4a843;
   font-weight: 500;
 }
 .report-container .rmeta {
-  font-size: 10px;
-  color: #3a2c10;
-  margin-top: 4px;
+  font-size: 13px;
+  color: #4a3c18;
+  margin-top: 6px;
 }
 .report-container .risk-badge {
-  padding: 4px 14px;
-  border-radius: 3px;
-  font-size: 10px;
+  padding: 6px 18px;
+  border-radius: 4px;
+  font-size: 13px;
   letter-spacing: 2px;
   text-transform: uppercase;
   font-weight: 500;
@@ -63,78 +64,78 @@
   margin-bottom: 18px;
 }
 .report-container .sec-label {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 2px;
-  color: #3a2c10;
+  color: #4a3c18;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   border-bottom: 0.5px solid #0f0c00;
-  padding-bottom: 5px;
+  padding-bottom: 8px;
 }
 .report-container .vuln-card {
   background: #070400;
   border: 0.5px solid #1f1600;
-  border-radius: 5px;
-  padding: 12px 14px;
-  margin-bottom: 10px;
+  border-radius: 6px;
+  padding: 16px 20px;
+  margin-bottom: 14px;
 }
 .report-container .vuln-card.critical {
-  border-left: 2px solid #e74c3c;
-  border-radius: 0 5px 5px 0;
+  border-left: 3px solid #e74c3c;
+  border-radius: 0 6px 6px 0;
 }
 .report-container .vuln-card.high {
-  border-left: 2px solid #e67e22;
-  border-radius: 0 5px 5px 0;
+  border-left: 3px solid #e67e22;
+  border-radius: 0 6px 6px 0;
 }
 .report-container .vuln-card.safe {
-  border-left: 2px solid #2ecc71;
-  border-radius: 0 5px 5px 0;
+  border-left: 3px solid #2ecc71;
+  border-radius: 0 6px 6px 0;
 }
 .report-container .vuln-top {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 14px;
+  margin-bottom: 12px;
 }
 .report-container .vuln-id {
-  font-size: 9px;
+  font-size: 11px;
   color: #4a3c18;
   letter-spacing: 1px;
 }
 .report-container .vuln-name {
-  font-size: 12px;
+  font-size: 15px;
   color: #d4a843;
   font-weight: 500;
   flex: 1;
 }
 .report-container .vuln-desc {
-  font-size: 11px;
-  color: #7a6030;
+  font-size: 13px;
+  color: #8a7040;
   line-height: 1.6;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .report-container .vuln-meta-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 .report-container .vmeta {
   background: #040300;
   border: 0.5px solid #0f0c00;
-  border-radius: 4px;
-  padding: 6px 8px;
+  border-radius: 6px;
+  padding: 10px 12px;
 }
 .report-container .vmeta-label {
-  font-size: 8px;
-  color: #3a2c10;
-  letter-spacing: 1px;
+  font-size: 11px;
+  color: #4a3c18;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  margin-bottom: 3px;
+  margin-bottom: 6px;
 }
 .report-container .vmeta-val {
-  font-size: 11px;
-  color: #a07830;
+  font-size: 14px;
+  color: #c9a84c;
 }
 .report-container .vmeta-val.danger {
   color: #e74c3c;
@@ -148,18 +149,19 @@
 .report-container .code-block {
   background: #030200;
   border: 0.5px solid #0f0c00;
-  border-radius: 4px;
-  padding: 10px 12px;
-  font-size: 10px;
+  border-radius: 6px;
+  padding: 16px 20px;
+  font-size: 13px;
   line-height: 1.7;
   font-family: var(--font-mono, monospace);
+  overflow-x: auto;
 }
 .report-container .code-label {
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 1.5px;
-  color: #3a2c10;
+  color: #4a3c18;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .report-container .kw { color: #c9a84c; }
 .report-container .str { color: #7a5c20; }
@@ -177,25 +179,25 @@
 }
 .report-container .ac-step {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: flex-start;
-  padding: 8px 0;
+  padding: 10px 0;
 }
 .report-container .ac-left {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 20px;
+  width: 24px;
   flex-shrink: 0;
 }
 .report-container .ac-dot {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 500;
   flex-shrink: 0;
 }
@@ -218,44 +220,44 @@
   width: 0.5px;
   flex: 1;
   background: #1a1200;
-  min-height: 16px;
-  margin-top: 3px;
+  min-height: 20px;
+  margin-top: 4px;
 }
 .report-container .ac-content {
   flex: 1;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
 }
 .report-container .ac-title {
-  font-size: 11px;
+  font-size: 14px;
   color: #c9a84c;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .report-container .ac-detail {
-  font-size: 10px;
-  color: #5a4820;
+  font-size: 12px;
+  color: #8a7040;
   line-height: 1.5;
 }
 .report-container .impact-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 12px;
 }
 .report-container .impact-item {
   background: #070400;
   border: 0.5px solid #1a1200;
-  border-radius: 4px;
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 14px 16px;
 }
 .report-container .impact-label {
-  font-size: 9px;
-  color: #3a2c10;
-  letter-spacing: 1px;
+  font-size: 11px;
+  color: #4a3c18;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
 }
 .report-container .impact-val {
-  font-size: 12px;
-  color: #a07830;
+  font-size: 14px;
+  color: #c9a84c;
   line-height: 1.4;
 }
 .report-container .impact-val.red { color: #e74c3c; }
@@ -263,17 +265,17 @@
 
 .report-container .footer-row {
   display: flex;
-  gap: 8px;
-  margin-top: 18px;
+  gap: 12px;
+  margin-top: 24px;
   border-top: 0.5px solid #0f0c00;
-  padding-top: 14px;
+  padding-top: 20px;
 }
 .report-container .btn {
-  font-size: 9px;
-  letter-spacing: 1.5px;
+  font-size: 11px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  padding: 7px 14px;
-  border-radius: 4px;
+  padding: 10px 18px;
+  border-radius: 6px;
   border: 0.5px solid;
   cursor: pointer;
   font-family: var(--font-mono, monospace);
