@@ -6,240 +6,326 @@ import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
 import logger from '../../utils/logger.js';
 import { robustParseJSON } from '../../utils/json.js';
-import { addVulnerability, addMessage, moveToNextFile } from '../graph/state.js';
+import { addMessage } from '../graph/state.js';
 
-// Hard limits 
-const MAX_FILE_SIZE_KB = 40;
-const MAX_VULNS_PER_FILE = 10;
-const VALID_SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
+// Hard limits
+const MAX_CONTEXT_VULNS = 20;
 
-// Files that should never be analyzed
-const SKIP_PATTERNS = [
-  /node_modules/,
-  /[/\\]vendor[/\\]/,
-  /\.min\.(js|css)$/,
-  /bootstrap/i,
-  /jquery/i,
-  /raphael/i,
-  /html5shiv/i,
-  /morris/i,
-  /assets[/\\](vendor|lib|plugins)/i,
-  /assets[/\\]js[/\\]tour/i,
-  /\.map$/,
-  /\.lock$/,
-  /package-lock/,
-  /pnpm-lock.yaml/,
-  /dist[/\\]/,
-  /docs[/\\]/,
-];
+// Architecture Layer 1: Context Bundle Format
+const buildContextBundle = (files) => {
+  const bundle = [];
+  bundle.push('=== FILE TREE ===');
+  bundle.push(files.map(f => f.path).join('\n'));
+  bundle.push('');
 
-const shouldSkipFile = (filePath, repoUrl = '') => {
-  // If analyzing Aegis Swarm itself, skip its internal architecture to avoid "self-audit" noise in demo
-  if (repoUrl.includes('aegis-swarm')) {
-    const internalPaths = [
-      /backend[/\\]src[/\\]agents/,
-      /backend[/\\]src[/\\]services/,
-      /backend[/\\]src[/\\]utils/,
-      /frontend[/\\]src/,
-    ];
-    if (internalPaths.some((p) => p.test(filePath))) return true;
-  }
+  files.filter(f => f.isInContextBundle).forEach(f => {
+    bundle.push(`=== FILE: ${f.path} ===`);
+    bundle.push(f.content);
+    bundle.push('');
+  });
 
-  return SKIP_PATTERNS.some((p) => p.test(filePath));
+  return bundle.join('\n');
 };
 
-// Main node 
+/**
+ * Red Team Narrative Node
+ * Takes deterministic findings and generates attack narratives
+ */
 export const redTeamAnalysisNode = async (state) => {
   try {
-    if (!state.currentFile) {
-      logger.info('No more files to analyze');
-      return { ...state, currentStep: 'analysis_complete' };
-    }
+    // If no vulnerabilities were found by deterministic tools, 
+    // Red Team can still perform a logic flaw scan on high-priority files
+    const vulnerabilities = state.vulnerabilities || [];
+    
+    if (vulnerabilities.length === 0) {
+      logger.info('No SAST findings — running logic flaw scan on top 10 priority files');
 
-    const file = state.currentFile;
+      const topFiles = [...state.files]
+        .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+        .slice(0, 10);
 
-    // Fast Path: Only analyze high priority files or if we explicitly want a deep scan
-    // In Fast Mode, we might want to skip low-priority files to save time/cost
-    if (state.fastMode && !file.isHighPriority) {
-      logger.info(`Fast Mode: Skipping low-priority file ${file.path}`);
-      return addMessage(state, {
-        role: 'system',
-        content: `Skipped ${file.path} (Fast Mode)`,
-        step: 'redteam_skip',
+      if (topFiles.length === 0) {
+        return { ...state, currentStep: 'redteam_complete' };
+      }
+
+      const contextBundle = buildContextBundle(topFiles);
+
+      sseService.sendProgress(state.auditId, {
+        message: 'Red Team: Independent logic flaw scan (no SAST findings)',
+        step: 'redteam_logic_scan',
       });
-    }
 
-    // Update status for sequential flow
-    if (state.currentStep === 'start_redteam' || state.currentFileIndex === 0) {
-       await storageService.updateAudit(state.auditId, { status: 'analyzing' });
-    }
+      const model = getLangChainModel('redteam');
+      const prompt = createLogicFlawPrompt(topFiles.map(f => f.path).join('\n'), contextBundle);
 
-    // Skip vendor / noisy files
-    if (shouldSkipFile(file.path, state.repoUrl)) {
-      logger.info(`Skipping (pattern match): ${file.path}`);
-      return addMessage(state, {
-        role: 'system',
-        content: `Skipped ${file.path}: excluded by pattern`,
-        step: 'redteam_skip',
-      });
-    }
-
-    logger.info(`Red Team analyzing: ${file.path}`);
-
-    sseService.sendRedTeamAnalyzing(state.auditId, {
-      message: `Analyzing ${file.path}`,
-      filePath: file.path,
-      fileIndex: state.currentFileIndex + 1,
-      totalFiles: state.files.length,
-    });
-
-    // Read & size-check file
-    const filePath = path.join(state.workspacePath, file.path);
-    let fileContent;
-    try {
-      fileContent = await fs.readFile(filePath, 'utf-8');
-    } catch (readErr) {
-      logger.warn(`Cannot read ${file.path}: ${readErr.message}`);
-      return addMessage(state, {
-        role: 'system',
-        content: `Skipped ${file.path}: unreadable`,
-        step: 'redteam_skip',
-      });
-    }
-
-    const fileSizeKB = Buffer.byteLength(fileContent, 'utf-8') / 1024;
-    if (fileSizeKB > MAX_FILE_SIZE_KB) {
-      logger.info(`Skipping ${file.path} — too large (${fileSizeKB.toFixed(1)} KB)`);
-      return addMessage(state, {
-        role: 'system',
-        content: `Skipped ${file.path}: too large (${fileSizeKB.toFixed(1)} KB)`,
-        step: 'redteam_skip',
-      });
-    }
-
-    // AI call
-    const model = getLangChainModel('redteam');
-    const prompt = createRedTeamPrompt(file.path, fileContent.slice(0, 8000), file.language);
-
-    let response;
-    try {
-      response = await model.invoke([
-        new SystemMessage('You are a security auditor. Respond with ONLY a valid JSON array.'),
-        new HumanMessage(prompt),
-      ]);
-    } catch (aiErr) {
-      logger.error(`AI call failed for ${file.path}: ${aiErr.message}`);
-      return addMessage(state, {
-        role: 'system',
-        content: `Analysis failed for ${file.path}: ${aiErr.message}`,
-        step: 'redteam_error',
-      });
-    }
-
-    // Parse & strictly validate
-    const vulnerabilities = parseAndValidate(response.content, file.path);
-    logger.info(`Found ${vulnerabilities.length} vulnerabilities in ${file.path}`);
-
-    // Persist
-    let updatedState = state;
-    for (const vuln of vulnerabilities) {
       try {
-        const dbVuln = await storageService.createVulnerability({
-          auditId: state.auditId,
-          ...vuln
-        });
+        const response = await model.invoke([
+          new SystemMessage('You are a senior offensive security researcher. Respond with ONLY valid JSON array.'),
+          new HumanMessage(prompt),
+        ]);
 
-        updatedState = addVulnerability(updatedState, {
-          ...vuln,
-          id: dbVuln.id,
+        let logicFindings = robustParseJSON(response.content, []);
+        if (!Array.isArray(logicFindings)) logicFindings = [];
+
+        const logicVulns = logicFindings.map((f, i) => ({
+          id: `LOGIC-${i + 1}`,
+          auditId: state.auditId,
+          filePath: f.file || topFiles[0]?.path || 'unknown',
+          lineNumber: f.line || 0,
+          severity: f.severity || 'Medium',
+          type: 'logic-flaw',
+          title: f.title,
+          description: f.description,
+          attackVector: f.attackVector,
+          impact: f.impact,
+          exploitCode: f.exploitCode || '',
+          source: 'redteam-logic',
+          status: 'detected',
+          metadata: { chainedWith: f.chainedWith || [] },
+        }));
+
+        for (const v of logicVulns) {
+          storageService.createVulnerability(v)
+            .catch(err => logger.warn(`Failed to save logic flaw: ${err.message}`));
+        }
+
+        return addMessage({
+          ...state,
+          vulnerabilities: logicVulns,
+          currentStep: 'redteam_complete',
+        }, {
+          role: 'redteam',
+          content: `Logic flaw scan found ${logicVulns.length} issues.`,
+          step: 'redteam_logic_complete',
         });
-        sseService.sendVulnerabilityFound(state.auditId, { ...vuln, id: dbVuln.id });
-      } catch (dbErr) {
-        logger.warn(`Failed to save vuln in ${vuln.filePath}: ${dbErr.message}`);
+      } catch (aiErr) {
+        logger.error(`Logic flaw scan failed: ${aiErr.message}`);
+        return { ...state, currentStep: 'redteam_complete' };
       }
     }
 
-    await storageService.updateAudit(state.auditId, {
-      scannedFiles: state.currentFileIndex + 1,
-      totalVulnerabilities: updatedState.stats.totalVulnerabilities,
-      criticalCount: updatedState.stats.criticalCount,
-      highCount: updatedState.stats.highCount,
-      mediumCount: updatedState.stats.mediumCount,
-      lowCount: updatedState.stats.lowCount,
+    logger.info(`Red Team narrating ${vulnerabilities.length} findings`);
+
+    // Group vulnerabilities by file to provide better context
+    const vulnsByFile = vulnerabilities.reduce((acc, v) => {
+      if (!acc[v.filePath]) acc[v.filePath] = [];
+      acc[v.filePath].push(v);
+      return acc;
+    }, {});
+
+    const updatedVulnerabilities = [...vulnerabilities];
+
+    // Send initial analyzing event
+    sseService.sendRedTeamAnalyzing(state.auditId, {
+      message: `Red Team analyzing ${vulnerabilities.length} findings across ${Object.keys(vulnsByFile).length} files`,
+      totalFindings: vulnerabilities.length,
+      status: 'redteam_analyzing'
     });
 
-    return addMessage(updatedState, {
+    const contextBundle = buildContextBundle(state.files);
+
+    for (const filePath in vulnsByFile) {
+      const fileVulns = vulnsByFile[filePath];
+      
+      sseService.sendProgress(state.auditId, {
+        message: `Red Team: Generating attack narratives for ${filePath}`,
+        step: 'redteam_narrative',
+        currentFile: filePath,
+        vulnerabilitiesCount: updatedVulnerabilities.length
+      });
+
+      // Read file content for specific context
+      let fileContent = '';
+      try {
+        fileContent = await fs.readFile(path.join(state.workspacePath, filePath), 'utf-8');
+      } catch (err) {
+        logger.warn(`Could not read file ${filePath} for Red Team context`);
+      }
+
+      const model = getLangChainModel('redteam');
+      const prompt = createRedTeamNarrativePrompt(filePath, fileContent.slice(0, 10000), fileVulns, contextBundle);
+
+      try {
+        const response = await model.invoke([
+          new SystemMessage('You are a senior offensive security researcher. Respond with ONLY valid JSON array of objects.'),
+          new HumanMessage(prompt),
+        ]);
+
+        let narratives = robustParseJSON(response.content, []);
+        if (!Array.isArray(narratives) && narratives && typeof narratives === 'object') {
+          narratives = [narratives];
+        }
+        
+        // Update vulnerabilities with narratives
+        narratives.forEach(n => {
+          const index = updatedVulnerabilities.findIndex(v => v.id === n.id || (v.filePath === filePath && v.ruleId === n.ruleId));
+          if (index !== -1) {
+            const severity = n.severity || updatedVulnerabilities[index].severity;
+            updatedVulnerabilities[index] = {
+              ...updatedVulnerabilities[index],
+              attackVector: n.attackVector,
+              impact: n.impact,
+              exploitCode: n.exploitCode,
+              severity: severity,
+              justification: n.justification,
+              metadata: {
+                ...updatedVulnerabilities[index].metadata,
+                chainedWith: Array.isArray(n.chainedWith) ? n.chainedWith : [],
+              },
+            };
+
+            // Persist narrative update
+            storageService.updateVulnerability(updatedVulnerabilities[index].id, {
+              exploitCode: n.exploitCode,
+              severity: severity,
+              description: `${updatedVulnerabilities[index].description}\n\n**Attack Narrative:**\n${n.attackVector}\n\n**Impact:**\n${n.impact}\n\n**Justification:**\n${n.justification}`
+            }).catch(err => logger.error(`Failed to update vuln narrative: ${err.message}`));
+            
+            // Send SSE event for this specific vulnerability finding
+            sseService.sendVulnerabilityFound(state.auditId, updatedVulnerabilities[index]);
+          }
+        });
+
+      } catch (aiErr) {
+        logger.error(`Red Team AI narrative failed for ${filePath}: ${aiErr.message}`);
+      }
+    }
+
+    // Update audit status to redteam_complete
+    await storageService.updateAudit(state.auditId, {
+      status: 'analyzing', // Backend state for next nodes
+    }).catch(err => logger.warn(`Failed to update audit status to analyzing: ${err.message}`));
+
+    // Send progress event with status
+    sseService.sendProgress(state.auditId, {
+      message: `Generated attack narratives for ${updatedVulnerabilities.length} vulnerabilities.`,
+      step: 'redteam_narrative_complete',
+      status: 'redteam_complete',
+    });
+
+    return addMessage({
+      ...state,
+      vulnerabilities: updatedVulnerabilities,
+      currentStep: 'redteam_complete',
+    }, {
       role: 'redteam',
-      content: `Analyzed ${file.path}: Found ${vulnerabilities.length} vulnerabilities`,
-      step: 'redteam_analysis',
+      content: `Generated attack narratives for ${updatedVulnerabilities.length} vulnerabilities.`,
+      step: 'redteam_narrative_complete',
     });
 
   } catch (error) {
-    logger.error('Red Team analysis failed:', error);
-    sseService.sendError(state.auditId, {
-      message: 'Red Team analysis failed',
+    logger.error('Red Team narrative phase failed:', error);
+    return {
+      ...state,
+      status: 'failed',
       error: error.message,
-      file: state.currentFile?.path,
-    });
-    return addMessage(state, {
-      role: 'system',
-      content: `Analysis failed: ${error.message}`,
-      step: 'redteam_analysis_error',
-    });
+    };
   }
 };
 
-const createRedTeamPrompt = (filePath, fileContent, language) => {
-  return `You are a high-end cyber-security auditor performing a deep-dive analysis of a mission-critical application.
-Analyze this ${language} file for real-world, actionable security vulnerabilities.
+const createRedTeamNarrativePrompt = (filePath, fileContent, findings, contextBundle) => {
+  return `You are a senior offensive security researcher conducting a red team assessment.
 
-CRITICAL INSTRUCTIONS:
-1. BE SPECIFIC: Identify exact lines where the flaw exists.
-2. BE REALISTIC: Do not mark everything as 'Critical'. Use a natural distribution of severities.
-3. PROVIDE EXPLOITS: For every finding, generate a clear, functional Proof-of-Concept (PoC) exploit code (e.g. JavaScript snippets, curl commands, or script logic).
-4. NO GENERIC FINDINGS: Do not report "Missing Input Validation" without explaining exactly WHAT input and WHY it's dangerous in this specific context.
-5. NO SELF-AUDIT: Ignore any code that looks like it belongs to the Aegis Swarm analysis platform itself.
+You have been given:
+1. Static analysis findings from Semgrep, Trufflehog, and Trivy (ground truth)
+2. The relevant source code around each finding
+3. The full context bundle (file tree + high priority files)
 
-**File Context**:
-File Path: ${filePath}
-Language: ${language}
+---
+CONTEXT BUNDLE:
+${contextBundle}
+---
 
-**Source Code**:
->>>>>>>
-\`\`\`${language}
+Your tasks:
+1. For each SAST finding, write a concrete attack narrative:
+   - How would an attacker discover this vulnerability?
+   - What is the exact exploit (HTTP request, payload, sequence of steps)?
+   - What is the impact if successfully exploited?
+   - Is this finding more or less severe in context than the tool rated it?
+
+2. Identify chains: can multiple findings be combined for greater impact?
+   Example: a secret in code (Trufflehog) + an exposed admin endpoint (Semgrep) = full account takeover chain.
+
+3. Logic flaw scan: review auth flows, access control, and session management in the code for issues SAST tools cannot detect.
+
+CRITICAL: Return a JSON array of objects. Even if there is only one finding, return it in an array [].
+
+File Under Analysis: ${filePath}
+Target File Content:
+\`\`\`
 ${fileContent}
 \`\`\`
-<<<<<<<
 
-Return ONLY a JSON array. Each item must have:
-{
-  "type": "Specific Vulnerability Name (e.g., NoSQL Injection, CSRF)",
-  "severity": "Critical" | "High" | "Medium" | "Low",
-  "lineNumber": number (The EXACT line where the flaw starts),
-  "description": "Detailed technical explanation of the flaw and its impact in THIS file.",
-  "exploitCode": "JavaScript/Bash/Curl code that demonstrates the exploit.",
-  "cweId": "CWE-XXX",
-  "cvssScore": number (0.0 to 10.0)
-}
-If no vulnerabilities exist, return [].`;
+Findings to narrate:
+${JSON.stringify(findings.map(f => ({ 
+  id: f.id, 
+  ruleId: f.ruleId, 
+  title: f.title, 
+  description: f.description, 
+  line: f.line,
+  metadata: f.metadata // Includes verified status for secrets, detector types, etc.
+})), null, 2)}
+
+CRITICAL INSTRUCTION: If a finding has "metadata.verified": true, it means the secret was confirmed active against a live API. Treat these as automatic Critical severity.
+
+For each finding, provide:
+1. ATTACK-VECTOR: A step-by-step exploit simulation. How would an attacker discover and trigger this?
+2. IMPACT: What the attacker achieves (e.g., data theft, RCE).
+3. EXPLOIT-CODE: A functional PoC (curl command, JS snippet, etc.). MAX 200 CHARACTERS.
+4. SEVERITY: Review the tool's severity and adjust if necessary (Critical, High, Medium, Low).
+5. JUSTIFICATION: Why you chose this severity.
+
+Return a JSON array of objects:
+[
+  {
+    "id": "original_id",
+    "ruleId": "original_ruleId",
+    "attackVector": "...",
+    "impact": "...",
+    "exploitCode": "...",
+    "severity": "...",
+    "justification": "...",
+    "chainedWith": ["SEMGREP-2", "TRUFFLEHOG-0"]
+  }
+]
+
+chainedWith: list IDs of other findings that combine with this one for greater impact. Use [] if standalone.`;
 };
 
-const parseAndValidate = (raw, filePath) => {
-  try {
-    const parsed = robustParseJSON(raw, []);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((v) => v.type && VALID_SEVERITIES.includes(v.severity) && v.lineNumber)
-      .map((v) => ({
-        ...v,
-        filePath,
-        cvssScore: v.cvssScore || 5.0,
-        cweId: v.cweId || 'CWE-000',
-      }));
-  } catch (err) {
-    logger.error(`Error parsing vulnerabilities for ${filePath}: ${err.message}`);
-    return [];
+const createLogicFlawPrompt = (fileList, contextBundle) => {
+  return `You are a senior offensive security researcher. SAST tools found no issues. Find logic flaws that static analysis cannot detect.
+
+Context bundle:
+---
+${contextBundle}
+---
+
+Files analyzed:
+${fileList}
+
+Check specifically — only report what you can point to in the code:
+1. IDOR — endpoint returns data keyed by user-controlled ID without ownership check
+2. Broken auth — password reset skips email verification, 2FA can be bypassed, session fixation
+3. Mass assignment — route/ORM accepts all fields without an allowlist
+4. Race conditions — concurrent requests can bypass rate limits or double-spend
+5. JWT algorithm confusion — accepts alg:none, or conflates RS256/HS256 keys
+6. GraphQL — introspection enabled and resolvers missing auth checks
+
+Return a JSON array. Return [] if you find nothing.
+
+[
+  {
+    "title": "Short descriptive title",
+    "file": "relative/path/to/file.js",
+    "line": 42,
+    "description": "What the logic flaw is and where in the code",
+    "attackVector": "Step-by-step exploit",
+    "impact": "What attacker achieves",
+    "exploitCode": "curl/payload (max 200 chars)",
+    "severity": "Critical" | "High" | "Medium" | "Low",
+    "chainedWith": []
   }
+]`;
 };
 
 export default redTeamAnalysisNode;

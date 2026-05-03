@@ -1,3 +1,5 @@
+import fetch from 'node-fetch';
+
 const API_URL = 'http://localhost:3000';
 const REPO_URL = 'https://github.com/adn26/aegis-swarm-bob';
 

@@ -24,8 +24,10 @@ export const sandboxTestNode = async (state) => {
 
     // Get patches for current file
     const filePatches = state.patches.filter(
-      p => p.filePath === file.path
+      p => (p.filePath || p.file_path) === file.path
     );
+    logger.info(`Sandbox: file=${file.path} | total patches in state=${state.patches?.length} | matching=${filePatches.length}`);
+    logger.info(`Patch filePaths in state: ${state.patches?.map(p => p.filePath || p.file_path).join(', ')}`);
 
     if (filePatches.length === 0) {
       logger.info(`No patches to test in ${file.path}`);
@@ -39,6 +41,7 @@ export const sandboxTestNode = async (state) => {
       message: `Deploying patches to sandbox for ${file.path}`,
       filePath: file.path,
       patchCount: filePatches.length,
+      status: 'testing'
     });
 
     // Run tests in real Docker sandbox

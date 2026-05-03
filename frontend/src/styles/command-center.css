@@ -325,6 +325,16 @@
   cursor: not-allowed;
 }
 
+.cc-input.no-spinner::-webkit-outer-spin-button,
+.cc-input.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cc-input.no-spinner {
+  -moz-appearance: textfield;
+}
+
 .cc-hint {
   display: block;
   font-size: 10px;

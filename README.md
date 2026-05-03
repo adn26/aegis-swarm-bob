@@ -27,10 +27,12 @@ Frontend (React) ←→ Backend (Express + LangGraph) ←→ Supabase (PostgreSQ
 
 ## 🚀 Quick Start
 
+For detailed setup instructions to run the frontend and backend locally, please follow the [**Quick Start Guide**](QUICK_START.md).
+
 ### Prerequisites
 
 - Node.js 20+
-- Docker & Docker Compose
+- Docker Desktop (for the Sandbox)
 - Supabase account
 - GitHub Personal Access Token
 - Google Cloud Platform account (for Vertex AI)
@@ -42,101 +44,38 @@ git clone https://github.com/adn26/aegis-swarm-bob.git
 cd aegis-swarm-bob
 ```
 
-### 2. Setup Supabase
+### 2. See the Quick Start Guide
 
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to SQL Editor and run the schema from `backend/src/db/supabase-schema.sql`
-3. Copy your project URL and keys
-
-### 3. Setup Google Vertex AI
-
-📖 **Detailed Guide**: [Vertex AI Setup](docs/VERTEX_AI_SETUP.md)
-
-Quick steps:
-1. Create GCP project
-2. Enable Vertex AI API
-3. Enable Claude in Model Garden
-4. Create service account with Vertex AI User role
-5. Download service account key JSON
-
-### 4. Configure Environment
-
-```bash
-cd backend
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
-
-```env
-# Supabase
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# Google Vertex AI (Recommended)
-AI_PROVIDER=vertex-claude
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-VERTEX_AI_PROJECT_ID=your-gcp-project-id
-VERTEX_AI_LOCATION=us-central1
-VERTEX_CLAUDE_MODEL=claude-4-6-opus
-
-# Or use Gemini via Vertex AI
-# AI_PROVIDER=vertex-gemini
-# VERTEX_GEMINI_MODEL=gemini-3-1-pro
-
-# Or OpenAI (Alternative)
-# AI_PROVIDER=openai
-# OPENAI_API_KEY=sk-...
-# OPENAI_MODEL=gpt-4o
-
-# GitHub
-GITHUB_TOKEN=ghp_...
-```
-
-### 5. Install Dependencies
-
-```bash
-npm install
-```
-
-### 6. Start Development Server
-
-```bash
-npm run dev
-```
-
-Server will start at `http://localhost:3000`
+📖 **Complete Guide**: [QUICK_START.md](QUICK_START.md)
 
 ## 🤖 AI Provider Options
 
-### Vertex AI - Claude (Recommended)
-**Best for security analysis and vulnerability detection**
+### Vertex AI - Gemini (Recommended & Default)
+**Best for high-volume analysis and balanced security checks**
+
+```env
+AI_PROVIDER=vertex-gemini
+VERTEX_GEMINI_MODEL=gemini-3-flash-preview
+```
+
+**Advantages:**
+- Massive context window
+- Fast response times
+- Native Google integration
+- Optimized pricing via GCP
+
+### Vertex AI - Claude
+**Best for deep reasoning and complex vulnerability detection**
 
 ```env
 AI_PROVIDER=vertex-claude
-VERTEX_CLAUDE_MODEL=claude-4-6-opus
+VERTEX_CLAUDE_OPUS_MODEL=claude-4-6-opus@latest
 ```
 
 **Advantages:**
 - Superior code analysis capabilities
 - 200K context window
 - Enterprise SLAs and support
-- Competitive pricing via GCP
-
-### Vertex AI - Gemini
-**Best for high-volume, cost-sensitive workloads**
-
-```env
-AI_PROVIDER=vertex-gemini
-VERTEX_GEMINI_MODEL=gemini-3-1-pro
-```
-
-**Advantages:**
-- 1M context window
-- Faster response times
-- Lower cost
-- Native Google integration
 
 ### OpenAI (Alternative)
 **Direct OpenAI API access**
@@ -288,11 +227,8 @@ npm test
 
 ## 📚 Documentation
 
-- [Architecture & Implementation Plan](PLAN.md)
-- [Vertex AI Setup Guide](docs/VERTEX_AI_SETUP.md)
-- [API Documentation](docs/api.md) (coming soon)
-- [Agent Design](docs/agents.md) (coming soon)
-- [Deployment Guide](docs/deployment.md) (coming soon)
+- [Quick Start Guide](QUICK_START.md)
+- [Security Scanner Architecture](docs/security-scanner-architecture.md)
 
 ## 🎯 Why Vertex AI?
 
@@ -324,8 +260,7 @@ MIT License - see LICENSE file for details
 
 For issues and questions:
 - GitHub Issues: [Create an issue](https://github.com/adn26/aegis-swarm-bob/issues)
-- Documentation: [Read the docs](docs/)
-- Vertex AI Setup: [Setup Guide](docs/VERTEX_AI_SETUP.md)
+- Quick Start Guide: [Setup Guide](QUICK_START.md)
 
 ---
 

@@ -36,8 +36,8 @@ class AuditOrchestrator {
       logger.info(`Created audit record: ${audit.id}`);
 
       // Start workflow in background (non-blocking)
-      // Use setImmediate to ensure it runs asynchronously
-      setImmediate(() => {
+      // Use a delay to ensure the frontend has time to establish SSE connection
+      setTimeout(() => {
         this.runWorkflow(audit.id, {
           auditId: audit.id,
           repoUrl: auditData.repoUrl,
@@ -46,7 +46,7 @@ class AuditOrchestrator {
         }).catch(error => {
           logger.error(`Workflow execution failed for audit ${audit.id}:`, error);
         });
-      });
+      }, 2000); // 2 second buffer for SSE handshake
 
       return audit;
 
@@ -69,6 +69,13 @@ class AuditOrchestrator {
       });
 
       logger.info(`Running workflow for audit: ${auditId}`);
+      
+      // Notify frontend that audit has started
+      sseService.sendAuditStarted(auditId, {
+        auditId,
+        repoUrl: auditData.repoUrl,
+        branch: auditData.branch,
+      });
 
       // Run the LangGraph workflow with state updates
       const finalState = await runAuditWorkflow(auditData, async (state) => {
@@ -80,9 +87,20 @@ class AuditOrchestrator {
           step: state.currentStep,
           filesScanned: state.currentFileIndex,
           totalFiles: state.files.length,
-          vulnerabilities: state.vulnerabilities.length,
-          patches: state.patches.length,
+          vulnerabilitiesCount: state.vulnerabilities?.length || 0,
+          patchesCount: state.patches?.length || 0,
         });
+
+        // Transition frontend UI based on step
+        if (state.currentStep === 'redteam_analysis') {
+          sseService.sendRedTeamAnalyzing(auditId, {
+            totalFindings: state.vulnerabilities?.length || 0
+          });
+        } else if (state.currentStep === 'blueteam_patch') {
+          sseService.sendBlueTeamPatching(auditId, {
+            totalFindings: state.vulnerabilities?.length || 0
+          });
+        }
 
         // Update running audit info
         this.runningAudits.set(auditId, {

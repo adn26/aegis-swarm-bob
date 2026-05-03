@@ -5,7 +5,7 @@ export interface Audit {
   branch?: string;
   commit_sha?: string;
   workspace_path?: string;
-  status: 'pending' | 'cloning' | 'scanning' | 'analyzing' | 'patching' | 'testing' | 'completed' | 'failed';
+  status: 'pending' | 'cloning' | 'scanning' | 'deterministic_analysis' | 'analyzing' | 'patching' | 'testing' | 'completed' | 'failed';
   total_files: number;
   scanned_files: number;
   total_vulnerabilities: number;

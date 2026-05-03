@@ -7,11 +7,11 @@ interface CommandBarProps {
 }
 
 function CommandBar({ badgeText = 'SYSTEM_ONLINE', badgeClass = 'live' }: CommandBarProps) {
-  const [time, setTime] = useState(new Date().toISOString().split('T')[1].split('.')[0]);
+  const [time, setTime] = useState(new Date().toLocaleTimeString());
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTime(new Date().toISOString().split('T')[1].split('.')[0]);
+      setTime(new Date().toLocaleTimeString());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -40,8 +40,8 @@ function CommandBar({ badgeText = 'SYSTEM_ONLINE', badgeClass = 'live' }: Comman
           <div className="cc-status-val">PROVISIONED</div>
         </div>
         <div className="cc-status-item" style={{ marginLeft: 'auto' }}>
-          <div className="cc-status-label">SERVER_TIME</div>
-          <div className="cc-status-val">{time} UTC</div>
+          <div className="cc-status-label">LOCAL_TIME</div>
+          <div className="cc-status-val">{time}</div>
         </div>
       </div>
     </div>

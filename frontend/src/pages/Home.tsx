@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { apiService } from '../services/api.service';
-import { AuditRequest } from '../types/audit.types';
+import { AuditRequest, Audit } from '../types/audit.types';
 import CommandBar from '../components/layout/CommandBar';
 import '../styles/command-center.css';
 
@@ -11,6 +11,22 @@ function Home() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recentAudits, setRecentAudits] = useState<Audit[]>([]);
+  const [auditsLoading, setAuditsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAudits = async () => {
+      try {
+        const audits = await apiService.getAudits(3);
+        setRecentAudits(audits);
+      } catch (err) {
+        console.error('Failed to fetch recent audits:', err);
+      } finally {
+        setAuditsLoading(false);
+      }
+    };
+    fetchAudits();
+  }, []);
 
   useGSAP(() => {
     const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
@@ -116,29 +132,16 @@ function Home() {
                   <span className="cc-hint">Public repositories or authenticated via internal tokens.</span>
                 </div>
 
-                <div className="cc-field-row">
-                  <div className="cc-field">
-                    <label className="cc-label">PR Number <span className="cc-optional">(OPTIONAL)</span></label>
-                    <input 
-                      type="number" 
-                      className="cc-input" 
-                      placeholder="e.g. 142" 
-                      value={formData.prNumber || ''}
-                      onChange={(e) => setFormData({...formData, prNumber: e.target.value ? parseInt(e.target.value) : undefined})}
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="cc-field">
-                    <label className="cc-label">Target Branch <span className="cc-optional">(DEFAULT: MAIN)</span></label>
-                    <input 
-                      type="text" 
-                      className="cc-input" 
-                      placeholder="main" 
-                      value={formData.branch || 'main'}
-                      onChange={(e) => setFormData({...formData, branch: e.target.value})}
-                      disabled={loading}
-                    />
-                  </div>
+                <div className="cc-field">
+                  <label className="cc-label">Target Branch <span className="cc-optional">(DEFAULT: MAIN)</span></label>
+                  <input 
+                    type="text" 
+                    className="cc-input" 
+                    placeholder="main" 
+                    value={formData.branch !== undefined ? formData.branch : 'main'}
+                    onChange={(e) => setFormData({...formData, branch: e.target.value})}
+                    disabled={loading}
+                  />
                 </div>
 
                 <button 
@@ -187,30 +190,48 @@ function Home() {
             <div className="cc-module" style={{ height: '100%' }}>
               <div className="cc-module-header">
                 <div className="cc-module-icon" style={{ color: '#6a5820' }}>◷</div>
-                <div className="cc-module-title">RECENT ACTIVITY (MOCK)</div>
+                <div className="cc-module-title">RECENT ACTIVITY</div>
               </div>
               <div className="cc-module-content">
-                <div className="cc-audit-item">
-                  <div className="cc-audit-status safe">✓</div>
-                  <div className="cc-audit-info">
-                    <div className="cc-audit-name">iWealthX / core-api</div>
-                    <div className="cc-audit-meta">PR #246 • Passed • 2h ago</div>
-                  </div>
-                </div>
-                <div className="cc-audit-item">
-                  <div className="cc-audit-status critical">⚠</div>
-                  <div className="cc-audit-info">
-                    <div className="cc-audit-name">finance-utils / auth</div>
-                    <div className="cc-audit-meta">PR #12 • 2 Vulns • 5h ago</div>
-                  </div>
-                </div>
-                <div className="cc-audit-item">
-                  <div className="cc-audit-status warning">●</div>
-                  <div className="cc-audit-info">
-                    <div className="cc-audit-name">deficorp / smart-contracts</div>
-                    <div className="cc-audit-meta">PR #99 • 1 High Vuln • 1d ago</div>
-                  </div>
-                </div>
+                {auditsLoading ? (
+                  <div style={{ color: '#6a5820', padding: '12px' }}>Loading...</div>
+                ) : recentAudits.length === 0 ? (
+                  <div style={{ color: '#6a5820', padding: '12px' }}>No recent activity.</div>
+                ) : (
+                  recentAudits.map((audit) => {
+                    const isCompleted = audit.status === 'completed';
+                    const isFailed = audit.status === 'failed';
+                    const hasVulns = audit.total_vulnerabilities > 0;
+                    
+                    let statusClass = 'warning';
+                    let statusIcon = '●';
+                    
+                    if (isCompleted && !hasVulns) {
+                      statusClass = 'safe';
+                      statusIcon = '✓';
+                    } else if (isFailed || (isCompleted && audit.critical_count > 0)) {
+                      statusClass = 'critical';
+                      statusIcon = '⚠';
+                    }
+
+                    const timeAgo = new Date(audit.created_at).toLocaleDateString();
+                    const repoName = audit.repo_url.split('/').slice(-2).join('/');
+                    const prText = audit.pr_number ? `PR #${audit.pr_number} • ` : `Branch: ${audit.branch} • `;
+                    const statusText = isCompleted ? (hasVulns ? `${audit.total_vulnerabilities} Vulns` : 'Passed') : audit.status;
+
+                    return (
+                      <Link to={`/audit/${audit.id}`} key={audit.id} style={{ textDecoration: 'none' }}>
+                        <div className="cc-audit-item">
+                          <div className={`cc-audit-status ${statusClass}`}>{statusIcon}</div>
+                          <div className="cc-audit-info">
+                            <div className="cc-audit-name">{repoName}</div>
+                            <div className="cc-audit-meta">{prText}{statusText} • {timeAgo}</div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>

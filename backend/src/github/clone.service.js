@@ -28,11 +28,23 @@ class CloneService {
    */
   parseRepoUrl(repoUrl) {
     try {
+      // Detect Pull Request URLs
+      let isPullRequest = false;
+      let pullNumber = null;
+      let baseUrl = repoUrl;
+      
+      const prMatch = repoUrl.match(/(https:\/\/github\.com\/[^\/]+\/[^\/]+)\/pull\/(\d+)/);
+      if (prMatch) {
+        isPullRequest = true;
+        baseUrl = prMatch[1];
+        pullNumber = prMatch[2];
+      }
+
       // Support both HTTPS and SSH URLs
       const httpsPattern = /github\.com\/([^\/]+)\/([^\/\.]+)/;
       const sshPattern = /git@github\.com:([^\/]+)\/([^\/\.]+)/;
       
-      let match = repoUrl.match(httpsPattern) || repoUrl.match(sshPattern);
+      let match = baseUrl.match(httpsPattern) || baseUrl.match(sshPattern);
       
       if (!match) {
         return { isValid: false };
@@ -43,6 +55,9 @@ class CloneService {
         owner: match[1],
         repo: match[2].replace('.git', ''),
         fullName: `${match[1]}/${match[2].replace('.git', '')}`,
+        isPullRequest,
+        pullNumber,
+        baseUrl,
       };
     } catch (error) {
       logger.error('Failed to parse repository URL:', error);
@@ -108,9 +123,12 @@ class CloneService {
     try {
       logger.info(`Cloning repository: ${repoInfo.fullName}`);
       
-      // Auto-detect branch if not provided
-      if (!branch) {
-        branch = await this.detectDefaultBranch(repoUrl);
+      // Use baseUrl for cloning
+      const targetUrl = repoInfo.baseUrl;
+      
+      // Auto-detect branch if not provided and not a PR
+      if (!branch && !repoInfo.isPullRequest) {
+        branch = await this.detectDefaultBranch(targetUrl);
         logger.info(`Using detected branch: ${branch}`);
       }
       
@@ -118,40 +136,65 @@ class CloneService {
       const git = simpleGit();
       
       // Add GitHub token for authentication if available
-      let authRepoUrl = repoUrl;
-      if (config.github.token && repoUrl.startsWith('https://')) {
-        authRepoUrl = repoUrl.replace(
+      let authRepoUrl = targetUrl;
+      if (config.github.token && targetUrl.startsWith('https://')) {
+        authRepoUrl = targetUrl.replace(
           'https://github.com/',
           `https://${config.github.token}@github.com/`
         );
       }
 
-      // Try to clone with specified/detected branch
       let cloneSuccess = false;
-      const branchesToTry = [branch, 'main', 'master'];
       let lastError = null;
 
-      for (const tryBranch of branchesToTry) {
+      if (repoInfo.isPullRequest) {
         try {
-          logger.info(`Attempting to clone branch: ${tryBranch}`);
+          logger.info(`Attempting to clone Pull Request #${repoInfo.pullNumber}`);
+          // Clone base repo without checking out
+          await git.clone(authRepoUrl, repoWorkspace, ['--no-checkout']);
           
-          const cloneOptions = {
-            '--depth': 1,
-            '--single-branch': null,
-            '--branch': tryBranch,
-          };
-
-          await git.clone(authRepoUrl, repoWorkspace, cloneOptions);
+          const repoGit = simpleGit(repoWorkspace);
+          // Fetch the PR
+          await repoGit.fetch('origin', `pull/${repoInfo.pullNumber}/head:pr-${repoInfo.pullNumber}`);
+          // Checkout the PR branch
+          await repoGit.checkout(`pr-${repoInfo.pullNumber}`);
+          
           cloneSuccess = true;
-          branch = tryBranch; // Update to the successful branch
-          logger.info(`Successfully cloned branch: ${tryBranch}`);
-          break;
+          branch = `pr-${repoInfo.pullNumber}`;
+          logger.info(`Successfully cloned PR #${repoInfo.pullNumber}`);
         } catch (error) {
           lastError = error;
-          logger.warn(`Failed to clone branch ${tryBranch}: ${error.message}`);
-          // Clean up failed attempt
+          logger.warn(`Failed to clone PR #${repoInfo.pullNumber}: ${error.message}`);
           if (fs.existsSync(repoWorkspace)) {
             fs.rmSync(repoWorkspace, { recursive: true, force: true });
+          }
+        }
+      } else {
+        // Try to clone with specified/detected branch
+        const branchesToTry = [branch, 'main', 'master'];
+
+        for (const tryBranch of branchesToTry) {
+          try {
+            logger.info(`Attempting to clone branch: ${tryBranch}`);
+            
+            const cloneOptions = {
+              '--depth': 1,
+              '--single-branch': null,
+              '--branch': tryBranch,
+            };
+
+            await git.clone(authRepoUrl, repoWorkspace, cloneOptions);
+            cloneSuccess = true;
+            branch = tryBranch; // Update to the successful branch
+            logger.info(`Successfully cloned branch: ${tryBranch}`);
+            break;
+          } catch (error) {
+            lastError = error;
+            logger.warn(`Failed to clone branch ${tryBranch}: ${error.message}`);
+            // Clean up failed attempt
+            if (fs.existsSync(repoWorkspace)) {
+              fs.rmSync(repoWorkspace, { recursive: true, force: true });
+            }
           }
         }
       }

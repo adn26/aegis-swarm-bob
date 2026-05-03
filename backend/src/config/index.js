@@ -62,9 +62,9 @@ const config = {
       
       // Gemini via Vertex AI
       gemini: {
-        model: process.env.VERTEX_GEMINI_MODEL || 'gemini-1.5-pro',
-        maxTokens: parseInt(process.env.VERTEX_GEMINI_MAX_TOKENS || '4096', 10),
-        temperature: parseFloat(process.env.VERTEX_GEMINI_TEMPERATURE || '0.7'),
+        model: process.env.VERTEX_GEMINI_MODEL || 'gemini-3-flash-preview',
+        maxTokens: parseInt(process.env.VERTEX_GEMINI_MAX_TOKENS || '8192', 10),
+        temperature: parseFloat(process.env.VERTEX_GEMINI_TEMPERATURE || '0.1'),
       },
     },
     
@@ -140,13 +140,13 @@ const config = {
     file: process.env.LOG_FILE || path.join(__dirname, '../../logs/aegis.log'),
   },
   
-  // File scanning
-  scanning: {
-    maxFileSize: 1024 * 1024, // 1MB per file
-    supportedExtensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'],
-    ignoredDirs: ['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt'],
-    ignoredFiles: ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'],
-  },
+    // File scanning
+    scanning: {
+      maxFileSize: 1024 * 1024, // 1MB per file
+      supportedExtensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.go', '.rb', '.java', '.c', '.cpp', '.cs', '.php', '.yml', '.yaml', '.json', '.env', 'dockerfile', ''],
+      ignoredDirs: ['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', 'vendor', 'test-fixtures', 'mock-data'],
+      ignoredFiles: ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'Pipfile.lock'],
+    },
 };
 
 // Validation

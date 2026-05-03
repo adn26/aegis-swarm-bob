@@ -33,10 +33,18 @@ class SSEService {
     this.sendEvent(auditId, 'connected', {
       message: 'Connected to audit stream',
       auditId,
+      timestamp: new Date().toISOString()
     });
+
+    // Send a comment as keep-alive every 30 seconds
+    const heartbeat = setInterval(() => {
+      res.write(': heartbeat\n\n');
+      if (typeof res.flush === 'function') res.flush();
+    }, 30000);
     
     // Handle client disconnect
     res.on('close', () => {
+      clearInterval(heartbeat);
       this.removeConnection(auditId, res);
     });
   }
@@ -73,6 +81,7 @@ class SSEService {
     for (const res of connections) {
       try {
         res.write(eventData);
+        if (typeof res.flush === 'function') res.flush();
       } catch (error) {
         logger.error(`Failed to send SSE event to client:`, error);
         this.removeConnection(auditId, res);

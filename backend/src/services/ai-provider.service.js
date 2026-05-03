@@ -1,5 +1,6 @@
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { execSync } from 'child_process';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
@@ -134,11 +135,13 @@ class VertexGLM5Provider extends AIProvider {
     try {
       await this.ensureValidToken();
       
-      const response = await this.model.invoke([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const response = await this.model.invoke(messages);
 
-      return response.content;
+      // Handle different response formats
+      if (typeof response === 'string') return response;
+      if (response && response.content) return response.content;
+      return JSON.stringify(response);
     } catch (error) {
       logger.error('Vertex AI GLM-5 error:', error);
       throw new AgentError('Vertex AI GLM-5', 'Failed to generate completion', error.message);
@@ -149,9 +152,8 @@ class VertexGLM5Provider extends AIProvider {
     try {
       await this.ensureValidToken();
       
-      const stream = await this.model.stream([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const stream = await this.model.stream(messages);
 
       for await (const chunk of stream) {
         if (chunk.content) {
@@ -167,7 +169,6 @@ class VertexGLM5Provider extends AIProvider {
 
 /**
  * Vertex AI - Claude Opus Provider (Red Team Agent)
- * Deep reasoning for complex vulnerability detection
  */
 class VertexClaudeOpusProvider extends AIProvider {
   constructor() {
@@ -186,11 +187,12 @@ class VertexClaudeOpusProvider extends AIProvider {
 
   async generateCompletion(prompt, options = {}) {
     try {
-      const response = await this.model.invoke([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const response = await this.model.invoke(messages);
 
-      return response.content;
+      if (typeof response === 'string') return response;
+      if (response && response.content) return response.content;
+      return JSON.stringify(response);
     } catch (error) {
       logger.error('Vertex AI Claude Opus error:', error);
       throw new AgentError('Vertex AI Claude Opus', 'Failed to generate completion', error.message);
@@ -199,9 +201,8 @@ class VertexClaudeOpusProvider extends AIProvider {
 
   async *streamCompletion(prompt, options = {}) {
     try {
-      const stream = await this.model.stream([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const stream = await this.model.stream(messages);
 
       for await (const chunk of stream) {
         if (chunk.content) {
@@ -216,8 +217,7 @@ class VertexClaudeOpusProvider extends AIProvider {
 }
 
 /**
- * Vertex AI - Claude Haiku Provider (Blue Team Agent & Judge)
- * Fast patching and verification
+ * Vertex AI - Claude Haiku Provider
  */
 class VertexClaudeHaikuProvider extends AIProvider {
   constructor() {
@@ -236,11 +236,12 @@ class VertexClaudeHaikuProvider extends AIProvider {
 
   async generateCompletion(prompt, options = {}) {
     try {
-      const response = await this.model.invoke([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const response = await this.model.invoke(messages);
 
-      return response.content;
+      if (typeof response === 'string') return response;
+      if (response && response.content) return response.content;
+      return JSON.stringify(response);
     } catch (error) {
       logger.error('Vertex AI Claude Haiku error:', error);
       throw new AgentError('Vertex AI Claude Haiku', 'Failed to generate completion', error.message);
@@ -249,9 +250,8 @@ class VertexClaudeHaikuProvider extends AIProvider {
 
   async *streamCompletion(prompt, options = {}) {
     try {
-      const stream = await this.model.stream([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const stream = await this.model.stream(messages);
 
       for await (const chunk of stream) {
         if (chunk.content) {
@@ -266,8 +266,7 @@ class VertexClaudeHaikuProvider extends AIProvider {
 }
 
 /**
- * Vertex AI - Claude Sonnet Provider (Alternative)
- * Balanced performance
+ * Vertex AI - Claude Sonnet Provider
  */
 class VertexClaudeSonnetProvider extends AIProvider {
   constructor() {
@@ -286,11 +285,12 @@ class VertexClaudeSonnetProvider extends AIProvider {
 
   async generateCompletion(prompt, options = {}) {
     try {
-      const response = await this.model.invoke([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const response = await this.model.invoke(messages);
 
-      return response.content;
+      if (typeof response === 'string') return response;
+      if (response && response.content) return response.content;
+      return JSON.stringify(response);
     } catch (error) {
       logger.error('Vertex AI Claude Sonnet error:', error);
       throw new AgentError('Vertex AI Claude Sonnet', 'Failed to generate completion', error.message);
@@ -299,9 +299,8 @@ class VertexClaudeSonnetProvider extends AIProvider {
 
   async *streamCompletion(prompt, options = {}) {
     try {
-      const stream = await this.model.stream([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const stream = await this.model.stream(messages);
 
       for await (const chunk of stream) {
         if (chunk.content) {
@@ -317,7 +316,6 @@ class VertexClaudeSonnetProvider extends AIProvider {
 
 /**
  * Vertex AI - Gemini Provider
- * Access Gemini models through Google Vertex AI
  */
 class VertexGeminiProvider extends AIProvider {
   constructor() {
@@ -336,11 +334,59 @@ class VertexGeminiProvider extends AIProvider {
 
   async generateCompletion(prompt, options = {}) {
     try {
-      const response = await this.model.invoke([
-        { role: 'user', content: prompt }
-      ]);
+      let messages;
+      if (Array.isArray(prompt)) {
+        messages = prompt;
+      } else {
+        messages = [new HumanMessage(prompt)];
+      }
 
-      return response.content;
+      // Convert to LangChain message instances correctly for ChatVertexAI
+      const finalMessages = messages.map(m => {
+        const content = typeof m === 'string' ? m : (m.content || m.text || '');
+        const role = typeof m === 'string' ? 'human' : (m.role || m.type || 'human');
+
+        let msg;
+        if (role === 'system') {
+          msg = new SystemMessage(content);
+        } else if (role === 'ai' || role === 'assistant') {
+          // Note: ChatVertexAI uses AIMessage but let's check what's available
+          // For now, we mainly use System and Human in our nodes
+          msg = new HumanMessage(content); // Fallback
+        } else {
+          msg = new HumanMessage(content);
+        }
+        
+        return msg;
+      });
+
+      logger.info(`Gemini invoking with ${finalMessages.length} messages`);
+
+      // Use string prompt directly. LangChain Vertex AI sometimes fails with messages arrays.
+      let combinedPrompt = finalMessages.map(m => {
+        let role = 'User';
+        if (m instanceof SystemMessage || m.role === 'system' || m._getType?.() === 'system') role = 'System';
+        return `[${role}]\n${m.content}`;
+      }).join('\n\n');
+
+      combinedPrompt += "\n\nCRITICAL: You MUST respond with ONLY a valid, strictly formatted JSON array or object. Escape ALL double quotes inside string values using \\\" and newlines using \\n. Do not wrap the JSON in markdown code blocks.";
+
+      let response;
+      try {
+        const payload = [
+          ["system", "You are an expert. Please respond only in JSON."],
+          ["human", combinedPrompt]
+        ];
+        
+        try {
+          const boundModel = this.model.bind({ response_mime_type: "application/json" });
+          response = await boundModel.invoke(payload);
+        } catch (e) {
+          response = await this.model.invoke(payload);
+        }
+      } catch (err) {
+        throw err;
+      }
     } catch (error) {
       logger.error('Vertex AI Gemini error:', error);
       throw new AgentError('Vertex AI Gemini', 'Failed to generate completion', error.message);
@@ -349,9 +395,28 @@ class VertexGeminiProvider extends AIProvider {
 
   async *streamCompletion(prompt, options = {}) {
     try {
-      const stream = await this.model.stream([
-        { role: 'user', content: prompt }
-      ]);
+      let messages;
+      if (Array.isArray(prompt)) {
+        messages = prompt.map(m => {
+          if (typeof m === 'string') return new HumanMessage(m);
+          const isProperInstance = m._getType || m.getType;
+          if (m.content && !isProperInstance) {
+            if (m.role === 'system' || m.type === 'system') return new SystemMessage(m.content);
+            return new HumanMessage(m.content);
+          }
+          return m;
+        });
+      } else {
+        messages = [new HumanMessage(prompt)];
+      }
+
+      const finalMessages = messages.map(m => {
+        if (typeof m._getType === 'function' || typeof m.getType === 'function') return m;
+        if (m.role === 'system' || m.type === 'system') return new SystemMessage(m.content || m.text || '');
+        return new HumanMessage(m.content || m.text || '');
+      });
+      
+      const stream = await this.model.stream(finalMessages);
 
       for await (const chunk of stream) {
         if (chunk.content) {
@@ -366,8 +431,7 @@ class VertexGeminiProvider extends AIProvider {
 }
 
 /**
- * OpenAI Provider (Alternative)
- * Direct OpenAI API access
+ * OpenAI Provider
  */
 class OpenAIProvider extends AIProvider {
   constructor() {
@@ -385,11 +449,12 @@ class OpenAIProvider extends AIProvider {
 
   async generateCompletion(prompt, options = {}) {
     try {
-      const response = await this.model.invoke([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const response = await this.model.invoke(messages);
 
-      return response.content;
+      if (typeof response === 'string') return response;
+      if (response && response.content) return response.content;
+      return JSON.stringify(response);
     } catch (error) {
       logger.error('OpenAI error:', error);
       throw new AgentError('OpenAI', 'Failed to generate completion', error.message);
@@ -398,9 +463,8 @@ class OpenAIProvider extends AIProvider {
 
   async *streamCompletion(prompt, options = {}) {
     try {
-      const stream = await this.model.stream([
-        { role: 'user', content: prompt }
-      ]);
+      const messages = Array.isArray(prompt) ? prompt : [new HumanMessage(prompt)];
+      const stream = await this.model.stream(messages);
 
       for await (const chunk of stream) {
         if (chunk.content) {
@@ -416,7 +480,6 @@ class OpenAIProvider extends AIProvider {
 
 /**
  * Ollama Provider (Local Models)
- * For running local LLMs
  */
 class OllamaProvider extends AIProvider {
   constructor() {
@@ -437,7 +500,7 @@ class OllamaProvider extends AIProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.modelName,
-          prompt,
+          prompt: Array.isArray(prompt) ? prompt.map(m => m.content).join('\n') : prompt,
           stream: false,
           options: {
             num_predict: this.maxTokens,
@@ -465,7 +528,7 @@ class OllamaProvider extends AIProvider {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.modelName,
-          prompt,
+          prompt: Array.isArray(prompt) ? prompt.map(m => m.content).join('\n') : prompt,
           stream: true,
           options: {
             num_predict: this.maxTokens,
@@ -505,7 +568,6 @@ class OllamaProvider extends AIProvider {
     }
   }
 
-  // Ollama doesn't have a LangChain integration, so we return null
   getModel() {
     return null;
   }
@@ -513,33 +575,29 @@ class OllamaProvider extends AIProvider {
 
 /**
  * AI Provider Factory
- * Creates the appropriate provider based on agent role
  */
 class AIProviderFactory {
   static createProvider(agentRole = 'default') {
     const provider = config.ai.provider;
 
-    // For Vertex AI GLM-5, use same model for all agents
     if (provider === 'vertex-glm5') {
       return new VertexGLM5Provider();
     }
 
-    // For Vertex AI Claude, select model based on agent role
     if (provider === 'vertex-claude') {
       switch (agentRole) {
         case 'redteam':
         case 'attacker':
-          return new VertexClaudeOpusProvider(); // Deep reasoning
+          return new VertexClaudeOpusProvider();
         case 'blueteam':
         case 'defender':
         case 'judge':
-          return new VertexClaudeHaikuProvider(); // Fast execution
+          return new VertexClaudeHaikuProvider();
         default:
-          return new VertexClaudeSonnetProvider(); // Balanced
+          return new VertexClaudeSonnetProvider();
       }
     }
 
-    // For other providers, use standard selection
     switch (provider) {
       case 'vertex-gemini':
         return new VertexGeminiProvider();
@@ -553,13 +611,8 @@ class AIProviderFactory {
   }
 }
 
-// Provider instances cache
 const providerInstances = new Map();
 
-/**
- * Get AI Provider for specific agent role
- * @param {string} agentRole - 'redteam', 'blueteam', 'judge', or 'default'
- */
 export const getAIProvider = (agentRole = 'default') => {
   if (!providerInstances.has(agentRole)) {
     const provider = AIProviderFactory.createProvider(agentRole);
@@ -569,10 +622,6 @@ export const getAIProvider = (agentRole = 'default') => {
   return providerInstances.get(agentRole);
 };
 
-/**
- * Get LangChain model for use with LangGraph
- * @param {string} agentRole - 'redteam', 'blueteam', 'judge', or 'default'
- */
 export const getLangChainModel = (agentRole = 'default') => {
   const provider = getAIProvider(agentRole);
   const model = provider.getModel();
@@ -581,13 +630,22 @@ export const getLangChainModel = (agentRole = 'default') => {
     throw new Error(`Provider ${provider.name} does not support LangChain integration`);
   }
   
-  return model;
+  // Wrap the model to ensure all calls route through the robust generateCompletion method
+  // This bypasses the message.getType prototype bugs in LangChain for Gemini
+  return {
+    ...model,
+    invoke: async (messages, options) => {
+      const content = await provider.generateCompletion(messages, options);
+      return { content };
+    },
+    stream: async function*(messages, options) {
+      for await (const chunk of provider.streamCompletion(messages, options)) {
+        yield { content: chunk };
+      }
+    }
+  };
 };
 
-/**
- * Get models for all agents
- * Returns an object with models for each agent role
- */
 export const getAllAgentModels = () => {
   return {
     redTeam: getLangChainModel('redteam'),

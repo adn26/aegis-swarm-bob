@@ -11,16 +11,35 @@ export const finalizeAuditNode = async (state) => {
   try {
     logger.info(`Finalizing audit: ${state.auditId}`);
 
+    // Apply Red vs Blue severity consensus rules
+    const resolvedVulnerabilities = state.vulnerabilities.map(v => {
+      if (!v.verdict) return v;
+      const consensusSeverity = resolveSeverity(v.severity, v.severity_final, v.verdict);
+      if (consensusSeverity === null) return { ...v, consensusExcluded: true };
+      return { ...v, severity: consensusSeverity };
+    });
+
+    // Persist consensus severity to DB (non-blocking)
+    resolvedVulnerabilities.forEach(v => {
+      if (v.verdict && !v.consensusExcluded) {
+        storageService.updateVulnerability(v.id, { severity: v.severity })
+          .catch(err => logger.warn(`Consensus severity persist failed for ${v.id}: ${err.message}`));
+      }
+    });
+
+    // Exclude false-positives from counts
+    const activeVulns = resolvedVulnerabilities.filter(v => !v.consensusExcluded);
+
     // Calculate final statistics
     const summary = {
       totalFiles: state.files.length,
       scannedFiles: state.files.length,
-      totalVulnerabilities: state.vulnerabilities.length,
-      criticalCount: state.vulnerabilities.filter(v => v.severity === 'Critical').length,
-      highCount: state.vulnerabilities.filter(v => v.severity === 'High').length,
-      mediumCount: state.vulnerabilities.filter(v => v.severity === 'Medium').length,
-      lowCount: state.vulnerabilities.filter(v => v.severity === 'Low').length,
-      aiRelatedCount: state.vulnerabilities.filter(v => v.isAiRelated).length,
+      totalVulnerabilities: activeVulns.length,
+      criticalCount: activeVulns.filter(v => v.severity === 'Critical').length,
+      highCount: activeVulns.filter(v => v.severity === 'High').length,
+      mediumCount: activeVulns.filter(v => v.severity === 'Medium').length,
+      lowCount: activeVulns.filter(v => v.severity === 'Low').length,
+      aiRelatedCount: activeVulns.filter(v => v.isAiRelated).length,
       patchesApplied: state.patches.length,
       patchesSuccessful: state.testResults.filter(r => r.passed).length,
       testsPassed: state.testResults.filter(r => r.passed).length > 0,
@@ -53,6 +72,7 @@ export const finalizeAuditNode = async (state) => {
     return addMessage(
       {
         ...state,
+        vulnerabilities: resolvedVulnerabilities,
         status: 'completed',
         currentStep: 'finalized',
         stats: {
@@ -91,6 +111,17 @@ export const finalizeAuditNode = async (state) => {
     };
   }
 };
+
+function resolveSeverity(redSeverity, blueSeverity, verdict) {
+  switch (verdict) {
+    case 'confirmed-upgraded':   return blueSeverity;
+    case 'confirmed-downgraded': return blueSeverity;
+    case 'confirmed':            return blueSeverity;
+    case 'disputed':             return 'Low';
+    case 'false-positive':       return null;
+    default:                     return redSeverity;
+  }
+}
 
 export default finalizeAuditNode;
 

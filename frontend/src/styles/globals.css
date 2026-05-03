@@ -44,23 +44,16 @@
     letter-spacing: -0.025em;
   }
 
-  /* Custom scrollbar - Clean Modern style */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
+  /* Custom scrollbar - Command Center style */
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: #111111; border-left: 1px solid #111111; }
+  *::-webkit-scrollbar-thumb { background: #ffd04e; border-radius: 4px; }
+  *::-webkit-scrollbar-thumb:hover { background: #c9a84c; }
 
-  ::-webkit-scrollbar-track {
-    @apply bg-secondary rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-slate-300 rounded-full border-2 border-solid border-secondary;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-400;
-  }
+  html::-webkit-scrollbar { width: 8px; height: 8px; }
+  html::-webkit-scrollbar-track { background: #111111; border-left: 1px solid #111111; }
+  html::-webkit-scrollbar-thumb { background: #ffd04e; border-radius: 4px; }
+  html::-webkit-scrollbar-thumb:hover { background: #c9a84c; }
 
   ::selection {
     @apply bg-primary/20 text-primary;

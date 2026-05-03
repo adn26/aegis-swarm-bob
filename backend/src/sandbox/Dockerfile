@@ -11,8 +11,8 @@ RUN apk add --no-cache \
     curl
 
 # Create a non-privileged user to run tests
-RUN adduser -D -u 1000 sandbox
-USER sandbox
+# The node image already has a 'node' user with uid 1000
+USER node
 
 # Set working directory
 WORKDIR /workspace

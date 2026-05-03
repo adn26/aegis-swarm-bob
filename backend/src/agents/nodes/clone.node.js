@@ -1,3 +1,4 @@
+import path from 'path';
 import cloneService from '../../github/clone.service.js';
 import storageService from '../../services/storage.service.js';
 import sseService from '../../services/sse.service.js';
@@ -14,9 +15,10 @@ export const cloneRepositoryNode = async (state) => {
 
     // Send SSE event
     sseService.sendAuditStarted(state.auditId, {
-      message: 'Starting repository clone',
+      message: 'Starting ingestion: cloning repository',
       repoUrl: state.repoUrl,
       branch: state.branch,
+      status: 'ingestion_started'
     });
 
     // Clone the repository
@@ -24,7 +26,8 @@ export const cloneRepositoryNode = async (state) => {
       state.repoUrl,
       state.branch
     );
-    const workspacePath = cloneResult.workspacePath;
+    // Ensure absolute path — Docker requires it for mounts
+    const workspacePath = path.resolve(cloneResult.workspacePath);
 
     // Update audit in database
     await storageService.updateAudit(state.auditId, {

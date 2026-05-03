@@ -70,10 +70,10 @@ const BlueTeamReport: React.FC = () => {
       <div className="rh">
         <div>
           <div className="rtitle">Blue Team — Patch & Remediation Report</div>
-          <div className="rname">Audit #{audit.id.slice(0, 8)} — {audit.repo_url}</div>
+          <div className="rname">Audit #{(audit.id || '').slice(0, 8)} — {audit.repo_url || (audit as any).repoUrl}</div>
           <div className="rmeta">
             Remediated by: Aegis Swarm &nbsp;|&nbsp; 
-            {audit.completed_at ? new Date(audit.completed_at).toLocaleString() : 'In Progress'} &nbsp;|&nbsp; 
+            {audit.completed_at || (audit as any).completedAt ? new Date(audit.completed_at || (audit as any).completedAt).toLocaleString() : 'In Progress'} &nbsp;|&nbsp; 
             {audit.status === 'completed' ? 'Verified & Secured' : 'Remediation In Progress'}
           </div>
         </div>
@@ -101,14 +101,14 @@ const BlueTeamReport: React.FC = () => {
           return (
             <div className="sec" key={patch.id}>
               <div className="sec-label">Mitigation {String(index + 1).padStart(2, '0')} — {linkedVuln?.type || 'Security Patch'}</div>
-              <div className={`vuln-card ${patch.test_passed ? 'safe' : 'high'}`}>
+              <div className={`vuln-card ${patch.test_passed || (patch as any).testPassed ? 'safe' : 'high'}`}>
                 <div className="vuln-top">
                   <span className="vuln-id flex items-center gap-1">
-                    <Shield className="w-3 h-3" /> PATCH-{patch.id.slice(0, 4)}
+                    <Shield className="w-3 h-3" /> PATCH-{(patch.id || '').slice(0, 4)}
                   </span>
-                  <span className="vuln-name">{patch.file_path}</span>
-                  <span className={`risk-badge ${patch.test_passed ? 'risk-low' : 'risk-high'}`}>
-                    {patch.test_passed ? 'Verified' : 'Pending'}
+                  <span className="vuln-name">{patch.file_path || (patch as any).filePath}</span>
+                  <span className={`risk-badge ${patch.test_passed || (patch as any).testPassed ? 'risk-low' : 'risk-high'}`}>
+                    {patch.test_passed || (patch as any).testPassed ? 'Verified' : 'Pending'}
                   </span>
                 </div>
 
@@ -128,12 +128,12 @@ const BlueTeamReport: React.FC = () => {
                 <div className="vuln-meta-row">
                   <div className="vmeta">
                     <div className="vmeta-label">File Path</div>
-                    <div className="vmeta-val truncate max-w-xs">{patch.file_path}</div>
+                    <div className="vmeta-val truncate max-w-xs">{patch.file_path || (patch as any).filePath}</div>
                   </div>
                   <div className="vmeta">
                     <div className="vmeta-label">Verification Status</div>
-                    <div className={`vmeta-val flex items-center gap-1 ${patch.test_passed ? 'safe' : 'warn'}`}>
-                      {patch.test_passed ? <><CheckCircle className="w-3 h-3" /> Passed Sandbox</> : 'Awaiting Sandbox Result...'}
+                    <div className={`vmeta-val flex items-center gap-1 ${patch.test_passed || (patch as any).testPassed ? 'safe' : 'warn'}`}>
+                      {patch.test_passed || (patch as any).testPassed ? <><CheckCircle className="w-3 h-3" /> Passed Sandbox</> : 'Awaiting Sandbox Result...'}
                     </div>
                   </div>
                 </div>
@@ -152,11 +152,11 @@ const BlueTeamReport: React.FC = () => {
                   </>
                 )}
 
-                {patch.test_output && (
+                {(patch.test_output || (patch as any).testOutput) && (
                   <>
                     <div className="code-label">Sandbox Verification Output</div>
                     <div className="code-block" style={{ backgroundColor: '#0a0a0a', borderColor: '#1e1e1e' }}>
-                      <pre className="whitespace-pre-wrap text-xs opacity-70 italic">{patch.test_output}</pre>
+                      <pre className="whitespace-pre-wrap text-xs opacity-70 italic">{patch.test_output || (patch as any).testOutput}</pre>
                     </div>
                   </>
                 )}

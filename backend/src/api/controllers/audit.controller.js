@@ -193,7 +193,7 @@ class AuditController {
   }
 
   /**
-   * Download PDF report for an audit
+   * Download Markdown report for an audit
    * GET /api/audit/:id/report
    */
   async downloadReport(req, res) {
@@ -211,23 +211,21 @@ class AuditController {
         });
       }
 
-      // Check if report exists
-      const report = await storageService.getReport(id);
+      // Generate the markdown report
+      const { default: reportService } = await import('../../services/report.service.js');
+      const reportPath = await reportService.generateMarkdownReport(id);
 
-      if (!report) {
-        return res.status(404).json({
-          success: false,
-          error: 'Report not found',
-          message: 'PDF report has not been generated yet',
-        });
-      }
-
-      // TODO: Implement PDF report generation in Phase 8
-      // For now, return report metadata
-      res.json({
-        success: true,
-        message: 'PDF report generation will be implemented in Phase 8',
-        data: report,
+      res.download(reportPath, `audit-${id}.md`, (err) => {
+        if (err) {
+          logger.error('Error downloading report:', err);
+          if (!res.headersSent) {
+            res.status(500).json({
+              success: false,
+              error: 'Failed to download report',
+              message: err.message,
+            });
+          }
+        }
       });
 
     } catch (error) {

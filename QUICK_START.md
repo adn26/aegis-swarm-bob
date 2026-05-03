@@ -41,6 +41,7 @@ Required variables:
 - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
 - `GOOGLE_APPLICATION_CREDENTIALS` - Path to your GCP service account JSON
 - `VERTEX_AI_PROJECT_ID` - Your GCP project ID
+- `VERTEX_GEMINI_MODEL` - E.g. `gemini-3-flash-preview`
 - `GITHUB_TOKEN` - Your GitHub personal access token
 
 #### Frontend Configuration
@@ -55,7 +56,17 @@ VITE_API_URL=http://localhost:3000
 VITE_API_BASE_PATH=/api
 ```
 
-### Step 3: Run Both Servers
+### Step 3: Setup Docker Sandbox (Required for Sandbox Testing)
+
+Aegis Swarm uses Docker to safely test generated patches. Ensure Docker Desktop is running on your machine, then build the sandbox image:
+
+```bash
+cd backend/src/sandbox
+docker build -t aegis-sandbox .
+cd ../../..
+```
+
+### Step 4: Run Both Servers
 
 From the **project root** directory:
 
@@ -76,7 +87,7 @@ You'll see output like:
 [frontend] ➜  Local:   http://localhost:5173/
 ```
 
-### Step 4: Open Your Browser
+### Step 5: Open Your Browser
 
 Navigate to: **http://localhost:5173**
 

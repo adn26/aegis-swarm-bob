@@ -63,16 +63,16 @@ const RedTeamReport: React.FC = () => {
       <div className="rh">
         <div>
           <div className="rtitle">Red Team — Exploit Report</div>
-          <div className="rname">Audit #{audit.id.slice(0, 8)} — {audit.repo_url}</div>
+          <div className="rname">Audit #{(audit.id || '').slice(0, 8)} — {audit.repo_url || (audit as any).repoUrl}</div>
           <div className="rmeta">
             Analyzed by: Aegis Swarm &nbsp;|&nbsp; 
-            {audit.completed_at ? new Date(audit.completed_at).toLocaleString() : 'In Progress'} &nbsp;|&nbsp; 
+            {audit.completed_at || (audit as any).completedAt ? new Date(audit.completed_at || (audit as any).completedAt).toLocaleString() : 'In Progress'} &nbsp;|&nbsp; 
             {audit.branch || 'main'}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div className={`risk-badge ${audit.critical_count > 0 ? 'risk-critical' : 'risk-high'}`}>
-            {audit.critical_count > 0 ? 'CRITICAL RISK' : 'HIGH RISK'}
+          <div className={`risk-badge ${(audit.critical_count || (audit as any).criticalCount || 0) > 0 ? 'risk-critical' : 'risk-high'}`}>
+            {(audit.critical_count || (audit as any).criticalCount || 0) > 0 ? 'CRITICAL RISK' : 'HIGH RISK'}
           </div>
           <div style={{ fontSize: '9px', color: '#3a2c10' }}>{vulnerabilities.length} vulnerabilities found</div>
         </div>
@@ -104,34 +104,48 @@ const RedTeamReport: React.FC = () => {
               <div className="vuln-desc p-4 bg-black/40 rounded border border-red-500/10 mb-4">
                 <div className="flex items-start gap-2">
                   <Shield className="w-4 h-4 text-red-500 mt-1 flex-shrink-0" />
-                  <span>{vuln.description}</span>
+                  <div className="flex flex-col gap-4 text-sm text-gray-300">
+                    {vuln.description.split('\n\n**').map((part, i) => {
+                      if (i === 0) return <p key={i}>{part}</p>;
+                      
+                      const [title, ...content] = part.split(':**\n');
+                      if (!content.length) return <p key={i}>**{part}</p>;
+
+                      return (
+                        <div key={i} className="mt-2">
+                          <h4 className="text-red-400 font-bold uppercase tracking-wide text-xs mb-1">{title}</h4>
+                          <p className="whitespace-pre-wrap">{content.join(':**\n')}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               <div className="vuln-meta-row">
                 <div className="vmeta">
                   <div className="vmeta-label">File Path</div>
-                  <div className="vmeta-val truncate max-w-xs">{vuln.file_path}</div>
+                  <div className="vmeta-val truncate max-w-xs">{vuln.file_path || (vuln as any).filePath}</div>
                 </div>
                 <div className="vmeta">
                   <div className="vmeta-label">Location</div>
-                  <div className="vmeta-val">Line {vuln.line_number || 'N/A'}</div>
+                  <div className="vmeta-val">Line {vuln.line_number || (vuln as any).lineNumber || (vuln as any).line || 'N/A'}</div>
                 </div>
                 <div className="vmeta">
                   <div className="vmeta-label">CVSS</div>
-                  <div className={`vmeta-val font-bold ${vuln.cvss_score && vuln.cvss_score > 7 ? 'text-red-500' : 'text-orange-500'}`}>
-                    {vuln.cvss_score || '5.0'}
+                  <div className={`vmeta-val font-bold ${(vuln.cvss_score || (vuln as any).cvssScore) && (vuln.cvss_score || (vuln as any).cvssScore) > 7 ? 'text-red-500' : 'text-orange-500'}`}>
+                    {vuln.cvss_score || (vuln as any).cvssScore || '5.0'}
                   </div>
                 </div>
               </div>
 
-              {vuln.exploit_code && (
+              {(vuln.exploit_code || (vuln as any).exploitCode) && (
                 <>
                   <div className="code-label flex items-center gap-2">
                     <Terminal className="w-3 h-3" /> Proof-of-concept exploit evidence
                   </div>
                   <div className="code-block" style={{ borderLeftColor: '#ef4444' }}>
                     <pre className="whitespace-pre-wrap text-red-400 font-mono text-sm">
-                      {vuln.exploit_code}
+                      {vuln.exploit_code || (vuln as any).exploitCode}
                     </pre>
                   </div>
                 </>
@@ -143,7 +157,7 @@ const RedTeamReport: React.FC = () => {
                 </div>
                 <div className="code-block" style={{ borderLeftColor: '#ef4444', background: '#0a0505' }}>
                   <pre className="whitespace-pre-wrap text-red-200/70 font-mono text-xs">
-                    {`File: ${vuln.file_path}:${vuln.line_number}\n\n// ... scanning code context ...\n// Vulnerability detected in this segment\n`}
+                    {`File: ${vuln.file_path || (vuln as any).filePath}:${vuln.line_number || (vuln as any).lineNumber || (vuln as any).line}\n\n// ... scanning code context ...\n// Vulnerability detected in this segment\n`}
                     {/* Note: In a real app, we would fetch the actual code snippet from the backend */}
                   </pre>
                 </div>

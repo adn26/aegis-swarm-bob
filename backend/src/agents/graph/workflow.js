@@ -5,6 +5,7 @@ import logger from '../../utils/logger.js';
 // Import node implementations
 import { cloneRepositoryNode } from '../nodes/clone.node.js';
 import { scanFilesNode } from '../nodes/scan.node.js';
+import { deterministicAnalysisNode } from '../nodes/analysis.node.js';
 import { fastAnalysisNode } from '../nodes/fast-analysis.node.js';
 import { redTeamAnalysisNode } from '../nodes/redteam.node.js';
 import { blueTeamPatchNode } from '../nodes/blueteam.node.js';
@@ -41,16 +42,14 @@ export const createAuditWorkflow = () => {
   // Add nodes
   workflow.addNode('clone_repository', cloneRepositoryNode);
   workflow.addNode('scan_files', scanFilesNode);
+  workflow.addNode('deterministic_analysis', deterministicAnalysisNode);
   workflow.addNode('fast_analysis', fastAnalysisNode);
   
   // Phase 1 Nodes
   workflow.addNode('redteam_analysis', redTeamAnalysisNode);
-  workflow.addNode('redteam_next_file', async (state) => moveToNextFile(state));
   
   // Phase 2 Nodes
-  workflow.addNode('prepare_blueteam', preparePhaseNode('blueteam'));
   workflow.addNode('blueteam_patch', blueTeamPatchNode);
-  workflow.addNode('blueteam_next_file', async (state) => moveToNextFile(state));
   
   // Phase 3 Nodes
   workflow.addNode('prepare_sandbox', preparePhaseNode('sandbox'));
@@ -71,32 +70,12 @@ export const createAuditWorkflow = () => {
     { continue: 'scan_files', end: END }
   );
   
-  // Scan -> Fast Analysis -> Red Team
-  workflow.addEdge('scan_files', 'fast_analysis');
+  // Scan -> Deterministic Analysis -> Fast Analysis -> Red Team -> Blue Team
+  workflow.addEdge('scan_files', 'deterministic_analysis');
+  workflow.addEdge('deterministic_analysis', 'fast_analysis');
   workflow.addEdge('fast_analysis', 'redteam_analysis');
-
-  // Red Team Loop
-  workflow.addConditionalEdges(
-    'redteam_analysis',
-    (state) => (state.currentFileIndex + 1 >= state.files.length ? 'next_phase' : 'continue'),
-    {
-      continue: 'redteam_next_file',
-      next_phase: 'prepare_blueteam'
-    }
-  );
-  workflow.addEdge('redteam_next_file', 'redteam_analysis');
-
-  // Blue Team Loop
-  workflow.addEdge('prepare_blueteam', 'blueteam_patch');
-  workflow.addConditionalEdges(
-    'blueteam_patch',
-    (state) => (state.currentFileIndex + 1 >= state.files.length ? 'next_phase' : 'continue'),
-    {
-      continue: 'blueteam_next_file',
-      next_phase: 'prepare_sandbox'
-    }
-  );
-  workflow.addEdge('blueteam_next_file', 'blueteam_patch');
+  workflow.addEdge('redteam_analysis', 'blueteam_patch');
+  workflow.addEdge('blueteam_patch', 'prepare_sandbox');
 
   // Sandbox Loop
   workflow.addEdge('prepare_sandbox', 'sandbox_test');

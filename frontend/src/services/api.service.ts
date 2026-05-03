@@ -60,6 +60,13 @@ class ApiService {
     return response.data;
   }
 
+  async getAudits(limit: number = 3): Promise<Audit[]> {
+    const response = await this.client.get<ApiResponse<{audits: Audit[]}>>(`/audit`, {
+      params: { limit }
+    });
+    return response.data.data?.audits || [];
+  }
+
   async getAudit(id: string): Promise<Audit> {
     const response = await this.client.get<ApiResponse<Audit>>(`/audit/${id}`);
     return response.data.data!;

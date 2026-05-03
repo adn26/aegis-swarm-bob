@@ -172,9 +172,24 @@ class FileScanner {
       '.tsx': 'TypeScript (React)',
       '.mjs': 'JavaScript (ES Module)',
       '.cjs': 'JavaScript (CommonJS)',
+      '.py': 'Python',
+      '.go': 'Go',
+      '.rb': 'Ruby',
+      '.java': 'Java',
+      '.c': 'C',
+      '.cpp': 'C++',
+      '.cs': 'C#',
+      '.php': 'PHP',
+      '.yml': 'YAML',
+      '.yaml': 'YAML',
+      '.json': 'JSON',
+      '.tf': 'Terraform',
+      '.sql': 'SQL',
+      '.sh': 'Shell',
+      '.env': 'Environment',
     };
     
-    return languageMap[ext] || 'JavaScript';
+    return languageMap[ext] || 'Text';
   }
 
   /**

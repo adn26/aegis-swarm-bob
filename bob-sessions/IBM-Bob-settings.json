@@ -1,0 +1,1 @@
+{"globalSettings":{"autoApprovalEnabled":true,"alwaysAllowReadOnly":true,"allowedCommands":["git log","git diff","git show"],"mode":"advanced","customModes":[],"customModePrompts":{"java-modernization":{}},"hasOpenedModeSelector":true}}

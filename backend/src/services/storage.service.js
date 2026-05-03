@@ -170,6 +170,39 @@ class StorageService {
   }
 
   /**
+   * Update a vulnerability
+   */
+  async updateVulnerability(id, data) {
+    try {
+      const updates = {};
+      
+      // These fields may not exist in the schema, but they are stored in the description field by the redteam node
+      // if (data.attackVector !== undefined) updates.attack_vector = data.attackVector;
+      // if (data.impact !== undefined) updates.impact = data.impact;
+      if (data.exploitCode !== undefined) updates.exploit_code = data.exploitCode;
+      if (data.severity !== undefined) updates.severity = data.severity;
+      if (data.description !== undefined) updates.description = data.description;
+      if (data.status !== undefined) updates.status = data.status;
+      // if (data.justification !== undefined) updates.justification = data.justification;
+
+      if (Object.keys(updates).length === 0) return null;
+
+      const { data: vulnerability, error } = await this.supabase
+        .from('vulnerabilities')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return vulnerability;
+    } catch (error) {
+      logger.error(`Failed to update vulnerability ${id}:`, error);
+      throw new DatabaseError(`Failed to update vulnerability ${id}`, error.message);
+    }
+  }
+
+  /**
    * Get vulnerabilities for an audit
    */
   async getVulnerabilities(auditId) {

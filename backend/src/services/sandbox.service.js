@@ -5,6 +5,55 @@ import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import { SandboxError } from '../utils/errors.js';
 
+async function detectTestRunner(workspacePath) {
+  try {
+    const raw = await fs.readFile(path.join(workspacePath, 'package.json'), 'utf-8');
+    const pkg = JSON.parse(raw);
+    const mainEntry = pkg.main || 'index.js';
+    if (pkg.scripts?.test && !pkg.scripts.test.includes('no test specified')) {
+      return { testCmd: 'npm test', fallbackCmd: `node --check ${mainEntry}` };
+    }
+    return { testCmd: 'npm test', fallbackCmd: `node --check ${mainEntry}` };
+  } catch {}
+
+  for (const f of ['pytest.ini', 'setup.py', 'pyproject.toml']) {
+    try {
+      await fs.access(path.join(workspacePath, f));
+      return { testCmd: 'pytest -q', fallbackCmd: 'python -m py_compile $(find . -name "*.py")' };
+    } catch {}
+  }
+
+  try {
+    await fs.access(path.join(workspacePath, 'go.mod'));
+    return { testCmd: 'go test ./...', fallbackCmd: 'go build ./...' };
+  } catch {}
+
+  try {
+    await fs.access(path.join(workspacePath, 'pom.xml'));
+    return { testCmd: 'mvn test -q', fallbackCmd: 'mvn compile -q' };
+  } catch {}
+
+  return { testCmd: null, fallbackCmd: 'node --check' };
+}
+
+async function runContainerCommand(container, shellCmd, timeoutMs) {
+  const instance = await container.exec({
+    Cmd: ['/bin/sh', '-c', shellCmd],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = await instance.start();
+  let output = '';
+  stream.on('data', (chunk) => { output += chunk.toString(); });
+  await new Promise((resolve, reject) => {
+    stream.on('end', resolve);
+    stream.on('error', reject);
+    setTimeout(() => reject(new Error('Container command timed out')), timeoutMs);
+  });
+  const info = await instance.inspect();
+  return { output, exitCode: info.ExitCode };
+}
+
 /**
  * Sandbox Service
  * Manages Docker containers for secure code execution and testing
@@ -61,58 +110,67 @@ class SandboxService {
       logger.info(`Container started: ${container.id}`);
 
       // 3. For each patch, test it
+      const { testCmd, fallbackCmd } = await detectTestRunner(workspacePath);
+      const effectiveTestCmd = testCmd || fallbackCmd;
+      logger.info(`Sandbox test runner: ${effectiveTestCmd}`);
+
       for (const patch of patches) {
-        logger.info(`Testing patch ${patch.id} for ${filePath}`);
-        
-        // --- REAL VERIFICATION LOGIC ---
-        // 1. Apply the patch
-        // 2. Run a security check (e.g., grep for dangerous patterns that should be gone)
-        // 3. Run a syntax check
-        
-        const testCommands = [
-          `# Verification for Patch ${patch.id}`,
-          `echo "[STEP 1] Checking original file..."`,
-          `ls -l ${filePath}`,
-          `echo "[STEP 2] Verifying patch implementation..."`,
-          // We simulate applying the patch by checking if the 'patchedCode' or similar logic exists
-          // In a real scenario, we'd write the file and run tests.
-          `grep -q "db.query" ${filePath} || echo "Warning: Parameterized query pattern not detected"`,
-          `echo "[STEP 3] Running static analysis..."`,
-          `node --check ${filePath} 2>&1 || echo "Syntax check passed"`,
-          `echo "[SUCCESS] Patch ${patch.id} verified."`
-        ];
+        logger.info(`Testing patch ${patch.id}`);
 
-        const exec = await container.exec({
-          Cmd: ['/bin/sh', '-c', testCommands.join(' && ')],
-          AttachStdout: true,
-          AttachStderr: true,
-        });
+        const absoluteFilePath = path.join(path.resolve(workspacePath), patch.filePath || filePath);
+        let originalContent = null;
 
-        const stream = await exec.start();
-        
+        try {
+          originalContent = await fs.readFile(absoluteFilePath, 'utf-8');
+        } catch (readErr) {
+          logger.warn(`Could not read original for patch ${patch.id}: ${readErr.message}`);
+        }
+
+        // Run baseline before injecting patch — captures pre-existing failures
+        const baseline = await runContainerCommand(container, `cd /workspace && (${effectiveTestCmd}) 2>&1`, this.timeout)
+          .catch(() => ({ output: '', exitCode: 1 }));
+
+        // Inject patch — write patched content to host filesystem (shared volume with container)
+        let injected = false;
+        if (originalContent !== null && patch.patchedCode) {
+          try {
+            await fs.writeFile(absoluteFilePath, patch.patchedCode, 'utf-8');
+            injected = true;
+          } catch (writeErr) {
+            logger.warn(`Patch injection failed for ${patch.id}: ${writeErr.message}`);
+          }
+        }
+
+        let passed = false;
         let output = '';
-        stream.on('data', (chunk) => {
-          output += chunk.toString();
-        });
+        let exitCode = 1;
 
-        const execResult = await new Promise((resolve, reject) => {
-          stream.on('end', async () => {
-            const inspect = await exec.inspect();
-            resolve(inspect);
+        if (injected) {
+          const patched = await runContainerCommand(container, `cd /workspace && (${effectiveTestCmd}) 2>&1`, this.timeout)
+            .catch(err => ({ output: err.message, exitCode: 1 }));
+          exitCode = patched.exitCode;
+          output = patched.output;
+          // Pass = no NEW failures (pre-existing failures don't count against the patch)
+          passed = exitCode === 0 || (baseline.exitCode !== 0 && exitCode === baseline.exitCode);
+        } else {
+          output = 'Patch injection skipped — could not write patched content.';
+          passed = false;
+        }
+
+        // Always restore original file — even if tests failed
+        if (originalContent !== null) {
+          await fs.writeFile(absoluteFilePath, originalContent, 'utf-8').catch(restoreErr => {
+            logger.error(`CRITICAL: Failed to restore ${absoluteFilePath}: ${restoreErr.message}`);
           });
-          stream.on('error', reject);
-          setTimeout(() => reject(new Error('Execution timed out')), this.timeout);
-        });
+        }
 
-        const passed = execResult.ExitCode === 0;
-        
         results.push({
           patchId: patch.id,
-          filePath: patch.filePath,
-          passed: passed,
-          output: output || (passed ? 'Security verification passed.' : 'Security verification failed.'),
-          exitCode: execResult.ExitCode,
-          executionTime: 150,
+          filePath: patch.filePath || filePath,
+          passed,
+          output: output || (passed ? 'Tests passed.' : 'Tests failed.'),
+          exitCode,
+          executionTime: 0,
         });
       }
 

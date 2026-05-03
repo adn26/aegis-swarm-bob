@@ -26,15 +26,30 @@ class SSEService {
     this.eventSource.onerror = (error) => {
       console.error('SSE connection error:', error);
       
+      // If the connection was closed by the server or network, try to reconnect
+      // Don't disconnect immediately, let it retry
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
-        console.log(`Reconnecting... Attempt ${this.reconnectAttempts}`);
+        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+        console.log(`Reconnecting... Attempt ${this.reconnectAttempts} in ${delay}ms`);
         
+        // Close current source before reconnecting
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+
         setTimeout(() => {
           this.connect(auditId);
-        }, this.reconnectDelay * this.reconnectAttempts);
+        }, delay);
       } else {
         console.error('Max reconnection attempts reached');
+        // Trigger an error event so the UI can show a proper error message instead of just stopping
+        this.trigger('error', { 
+          type: 'error', 
+          timestamp: new Date().toISOString(),
+          data: { message: 'Lost connection to command center. Please refresh the page.' } 
+        });
         this.disconnect();
       }
     };

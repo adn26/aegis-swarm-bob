@@ -9,188 +9,198 @@ import { robustParseJSON } from '../../utils/json.js';
 import { addPatch, addMessage } from '../graph/state.js';
 
 /**
- * Blue Team Patch Node
- * Generates secure patches for detected vulnerabilities
+ * Blue Team Node (Adversarial Verifier & Patcher)
+ * Verifies Red Team attack narratives and generates stable patches
  */
 export const blueTeamPatchNode = async (state) => {
   try {
-    const file = state.currentFile;
-    
-    if (!file) {
-      logger.warn('No current file for patching');
-      return state;
+    const vulnerabilities = state.vulnerabilities || [];
+    if (vulnerabilities.length === 0) {
+      return { ...state, currentStep: 'blueteam_complete' };
     }
 
-    // Get vulnerabilities for current file
-    const fileVulnerabilities = state.vulnerabilities.filter(
-      v => v.filePath === file.path
-    );
+    logger.info(`Blue Team verifying and patching ${vulnerabilities.length} vulnerabilities`);
 
-    if (fileVulnerabilities.length === 0) {
-      logger.info(`No vulnerabilities to patch in ${file.path}`);
-      return state;
-    }
+    // Group by file
+    const vulnsByFile = vulnerabilities.reduce((acc, v) => {
+      if (!acc[v.filePath]) acc[v.filePath] = [];
+      acc[v.filePath].push(v);
+      return acc;
+    }, {});
 
-    // Update status for sequential flow
-    if (state.currentStep === 'start_blueteam' || state.currentFileIndex === 0) {
-       await storageService.updateAudit(state.auditId, { status: 'patching' });
-    }
+    const updatedVulnerabilities = [...vulnerabilities];
+    const newPatches = [];
+    let patchesCount = 0;
 
-    logger.info(`Blue Team patching ${fileVulnerabilities.length} vulnerabilities in ${file.path}`);
-
-    // Send SSE event
+    // Send initial patching event
     sseService.sendBlueTeamPatching(state.auditId, {
-      message: `Generating patches for ${file.path}`,
-      filePath: file.path,
-      vulnerabilityCount: fileVulnerabilities.length,
+      message: `Blue Team verifying ${vulnerabilities.length} findings across ${Object.keys(vulnsByFile).length} files`,
+      totalFindings: vulnerabilities.length,
+      status: 'blueteam_patching'
     });
 
-    // Read file content
-    const filePath = path.join(state.workspacePath, file.path);
-    const fileContent = await fs.readFile(filePath, 'utf-8');
+    // Architecture Layer 1: Context Bundle Format
+    const buildContextBundle = (files) => {
+      const bundle = [];
+      bundle.push('=== FILE TREE ===');
+      bundle.push(files.map(f => f.path).join('\n'));
+      bundle.push('');
 
-    // Get Blue Team AI model
-    const model = getLangChainModel('blueteam');
+      files.filter(f => f.isInContextBundle).forEach(f => {
+        bundle.push(`=== FILE: ${f.path} ===`);
+        bundle.push(f.content);
+        bundle.push('');
+      });
 
-    // Generate patches for all vulnerabilities in this file
-    const prompt = createBlueTeamPrompt(file.path, fileContent, fileVulnerabilities, file.language);
+      return bundle.join('\n');
+    };
 
-    // Generate patches with AI
-    const response = await model.invoke([
-      new SystemMessage('You are a Blue Team security expert. Respond only with valid JSON arrays as instructed.'),
-      new HumanMessage(prompt)
-    ]);
+    const contextBundle = buildContextBundle(state.files);
 
-    // Parse patches from response
-    const patches = parsePatches(response.content, file.path);
+    for (const filePath in vulnsByFile) {
+      const fileVulns = vulnsByFile[filePath];
+      
+      sseService.sendProgress(state.auditId, {
+        message: `Blue Team: Verifying findings for ${filePath}`,
+        step: 'blueteam_verification',
+        currentFile: filePath,
+        vulnerabilitiesCount: vulnerabilities.length,
+        patchesCount: patchesCount
+      });
 
-    logger.info(`Generated ${patches.length} patches for ${file.path}`);
-
-    // Store patches in database and state
-    let updatedState = state;
-
-    for (const patch of patches) {
-      // Find the specific vulnerability by line number
-      const vulnerability =
-        fileVulnerabilities.find(v => v.lineNumber === patch.lineNumber) ||
-        fileVulnerabilities.find(v =>
-          Math.abs((v.lineNumber || 0) - (patch.lineNumber || 0)) <= 5
-        ) ||
-        fileVulnerabilities[0];
-
-      if (!vulnerability || !vulnerability.id) {
-        logger.warn(`No vulnerability ID found for patch at line ${patch.lineNumber}, skipping`);
-        continue;
+      // Read file content
+      let fileContent = '';
+      try {
+        fileContent = await fs.readFile(path.join(state.workspacePath, filePath), 'utf-8');
+      } catch (err) {
+        logger.warn(`Could not read file ${filePath} for Blue Team context`);
       }
+
+      const model = getLangChainModel('blueteam');
+      const prompt = createBlueTeamPrompt(filePath, fileContent, fileVulns);
 
       try {
-        // Save to database
-        const dbPatch = await storageService.createPatch({
-          vulnerabilityId: vulnerability.id,
-          auditId: state.auditId,
-          filePath: patch.filePath,
-          originalCode: patch.originalCode,
-          patchedCode: patch.patchedCode,
-          diff: patch.diff,
-          explanation: patch.explanation,
-          testPassed: false,
-        });
+        const response = await model.invoke([
+          new SystemMessage('You are a senior defensive security engineer. Respond with ONLY valid JSON.'),
+          new HumanMessage(prompt),
+        ]);
 
-        // Add to state
-        updatedState = addPatch(updatedState, {
-          ...patch,
-          id: dbPatch.id,
-          vulnerabilityId: vulnerability.id,
-        });
+        const verificationResults = robustParseJSON(response.content, []);
+        
+        for (const res of verificationResults) {
+          const vIndex = updatedVulnerabilities.findIndex(v => v.id === res.id || (v.filePath === filePath && v.ruleId === res.ruleId));
+          if (vIndex === -1) continue;
 
-        // Send SSE event
-        sseService.sendPatchGenerated(state.auditId, {
-          id: dbPatch.id,
-          file_path: patch.filePath,
-          vulnerability_id: vulnerability.id,
-          explanation: patch.explanation,
-        });
-      } catch (patchErr) {
-        logger.warn(`Skipped patch for ${patch.filePath}:${patch.lineNumber} — ${patchErr.message}`);
+          // Update vulnerability with Blue Team verdict
+          updatedVulnerabilities[vIndex] = {
+            ...updatedVulnerabilities[vIndex],
+            verdict: res.verdict,
+            severity_final: res.severity_final,
+            justification_final: res.justification,
+            existing_mitigations: res.existing_mitigations,
+            remediation_complexity: res.remediation_complexity || null,
+            additional_hardening: res.additional_hardening || [],
+          };
+
+          // Save patch if provided and confirmed
+          if (res.verdict.startsWith('confirmed') && res.patch) {
+            try {
+              const dbPatch = await storageService.createPatch({
+                vulnerabilityId: updatedVulnerabilities[vIndex].id,
+                auditId: state.auditId,
+                filePath: filePath,
+                originalCode: res.patch.code_before,
+                patchedCode: res.patch.code_after,
+                explanation: res.patch.description,
+                testPassed: false,
+              });
+
+              patchesCount++;
+              
+              newPatches.push({
+                ...dbPatch,
+                filePath: filePath
+              });
+              
+              // Send SSE event for this specific patch
+              sseService.sendPatchGenerated(state.auditId, {
+                id: dbPatch.id,
+                file_path: filePath,
+                vulnerability_id: updatedVulnerabilities[vIndex].id,
+                explanation: res.patch.description,
+              });
+            } catch (pErr) {
+              logger.error(`Failed to save patch: ${pErr.message}`);
+            }
+          }
+
+          // Severity NOT written here — consensus applied in finalize.node.js
+          storageService.updateVulnerability(updatedVulnerabilities[vIndex].id, {
+            description: `${updatedVulnerabilities[vIndex].description}\n\n**Blue Team Verdict:** ${res.verdict}\n${res.justification}`,
+          }).catch(err => logger.error(`Failed to update vuln verdict: ${err.message}`));
+        }
+
+      } catch (aiErr) {
+        logger.error(`Blue Team AI verification failed for ${filePath}: ${aiErr.message}`);
       }
     }
 
-    // Update audit statistics
+    // Update audit statistics and status
     await storageService.updateAudit(state.auditId, {
-      patchesApplied: updatedState.stats.patchesApplied,
+      patchesApplied: patchesCount,
+      status: 'patching', // Transition status
     });
 
-    return addMessage(updatedState, {
+    // Send final patching progress update
+    sseService.sendProgress(state.auditId, {
+      message: `Blue Team: Generated ${patchesCount} patches for ${vulnerabilities.length} vulnerabilities.`,
+      step: 'blueteam_complete',
+      status: 'blueteam_complete',
+      patchesCount: patchesCount
+    });
+
+    return addMessage({
+      ...state,
+      vulnerabilities: updatedVulnerabilities,
+      patches: [...(state.patches || []), ...newPatches],
+      currentStep: 'blueteam_complete',
+    }, {
       role: 'blueteam',
-      content: `Generated ${patches.length} patches for ${file.path}`,
-      step: 'blueteam_patch',
-      patches: patches.length,
+      content: `Blue Team verified ${updatedVulnerabilities.length} findings and generated ${patchesCount} patches.`,
+      step: 'blueteam_complete',
     });
 
   } catch (error) {
-    logger.error('Blue Team patching failed:', error);
-    sseService.sendError(state.auditId, {
-      message: 'Blue Team patching failed',
+    logger.error('Blue Team phase failed:', error);
+    return {
+      ...state,
+      status: 'failed',
       error: error.message,
-      file: state.currentFile?.path,
-    });
-    return addMessage(state, {
-      role: 'system',
-      content: `Patching failed for ${state.currentFile?.path}: ${error.message}`,
-      step: 'blueteam_patch_error',
-    });
+    };
   }
 };
 
-/**
- * Create Blue Team patching prompt
- */
-const createBlueTeamPrompt = (filePath, fileContent, vulnerabilities, language) => {
-  const vulnList = vulnerabilities.map((v, i) => 
-    `${i + 1}. **${v.type}** (${v.severity}) at line ${v.lineNumber}:\n   ${v.description}`
-  ).join('\n');
+const createBlueTeamPrompt = (filePath, fileContent, vulnerabilities) => {
+  // No context bundle — too long, causes truncation
+  return `You are a defensive security engineer. Review these findings and generate patches.
 
-  return `You are a Blue Team security expert generating secure patches for vulnerabilities.
-
-**File**: ${filePath}
-**Language**: ${language}
-
-**Original Code**:
-\`\`\`${language}
-${fileContent}
+File: ${filePath}
+\`\`\`
+${fileContent.slice(0, 4000)}
 \`\`\`
 
-**Vulnerabilities to Fix**:
-${vulnList}
+Findings:
+${JSON.stringify(vulnerabilities.map(v => ({
+  id: v.id,
+  title: v.title,
+  severity: v.severity,
+  line: v.line_start || 0,
+  description: v.description?.slice(0, 200),
+})), null, 2)}
 
-**Task**: Generate secure patches for each vulnerability. Follow security best practices.
+Return ONLY a JSON array. Keep all string values under 300 chars. No newlines inside strings — use \\n instead.
 
-**Response Format** (JSON array):
-[
-  {
-    "lineNumber": 42,
-    "originalCode": "const query = 'SELECT * FROM users WHERE id = ' + userId;",
-    "patchedCode": "const query = 'SELECT * FROM users WHERE id = ?';\\nconst result = await db.query(query, [userId]);",
-    "diff": "--- ${filePath}\\n+++ ${filePath}\\n@@ -42,1 +42,2 @@\\n-const query = 'SELECT * FROM users WHERE id = ' + userId;\\n+const query = 'SELECT * FROM users WHERE id = ?';\\n+const result = await db.query(query, [userId]);",
-    "explanation": "Replaced string concatenation with parameterized query to prevent SQL injection."
-  }
-]
-
-Generate complete, working patches. Use standard unified diff format for the "diff" field.`;
-};
-
-/**
- * Parse patches from AI response
- */
-const parsePatches = (response, filePath) => {
-  try {
-    const parsed = robustParseJSON(response, []);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((patch) => ({ ...patch, filePath }));
-  } catch (error) {
-    logger.error(`Failed to parse patches for ${filePath}:`, error);
-    return [];
-  }
+[{"id":"same_id","verdict":"confirmed","severity_final":"High","justification":"one sentence","existing_mitigations":"none or brief","remediation_complexity":"line-change","additional_hardening":[],"patch":{"description":"brief fix","code_before":"original snippet","code_after":"fixed snippet"}}]`;
 };
 
 export default blueTeamPatchNode;
